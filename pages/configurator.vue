@@ -15,7 +15,7 @@
         <UTabs
           :items="tabs"
         >
-          <template v-if="(escStore.firstValidEscData?.data.settings?.LAYOUT_REVISION as number) < 3" #tune>
+          <template #tune>
             <div class="pt-4 flex flex-col gap-4">
               <div class="flex gap-4 w-full justify-center">
                 <div v-for="(info, n) of escStore.escData" :key="n">
@@ -436,7 +436,7 @@
                       maxFirmwareVersion: 'v2.18'
                     }, {
                       field: 'RC_CAR_REVERSING',
-                      name: 'Car type reverse breaking'
+                      name: 'Car type reverse braking'
                     }]"
                     :radios="[{
                       field: 'BRAKE_ON_STOP',
