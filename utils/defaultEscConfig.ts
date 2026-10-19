@@ -11,7 +11,8 @@ export const DEFAULT_ESC_CONFIG: Record<string, number> = {
     MOTOR_DIRECTION: 0, // Normal
     BIDIRECTIONAL_MODE: 0, // Off (not 3D)
     ESC_PROTOCOL: 0, // Auto
-    USE_HALL_SENSORS: 0,
+    CURRENT_OFFSET: 0xFF, // not calibrated: firmware recalibrates idle current on next boot
+    DEMAG_COMPENSATION: 0, // Off
     DISABLE_STICK_CALIBRATION: 0,
     STUCK_ROTOR_PROTECTION: 0,
     STALL_PROTECTION: 0,

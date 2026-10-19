@@ -188,10 +188,6 @@
                       name: 'Stall protection',
                       help: 'Защита от срыва: при перегрузке ESC автоматически поднимает мощность, чтобы мотор не остановился. Осторожно с винтовыми моторами — может маскировать перегрузку.'
                     }, {
-                      field: 'USE_HALL_SENSORS',
-                      name: 'Use hall sensors',
-                      help: 'Использовать датчики Холла вместо бэк-ЭДС (если они установлены). Даёт более плавный и уверенный старт на низких оборотах.'
-                    }, {
                       field: 'INTERVAL_TELEMETRY',
                       name: '30ms interval telemetry',
                       help: 'Отправка телеметрии с фиксированным интервалом 30 мс вместо привязки к кадрам DShot.'
@@ -222,6 +218,19 @@
                         value: 1
                       }, {
                         name: 'by RPM',
+                        value: 2
+                      }]
+                    }, {
+                      field: 'DEMAG_COMPENSATION',
+                      name: 'Demag compensation',
+                      values: [{
+                        name: 'Off',
+                        value: 0
+                      }, {
+                        name: 'Low',
+                        value: 1
+                      }, {
+                        name: 'High',
                         value: 2
                       }]
                     }]"
@@ -744,12 +753,6 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref } from 'vue';
-import { applyDefaultEscConfig } from '~/utils/defaultEscConfig';
-
-function applyDefaultConfig() {
-  applyDefaultEscConfig(escStore.selectedEscInfo);
-}
 import type { EepromLayoutKeys } from '~/src/eeprom';
 
 const serialStore = useSerialStore();

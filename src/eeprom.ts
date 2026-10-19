@@ -178,7 +178,10 @@ export const EepromLayout = {
         offset: 0x26,
         size: 1
     },
-    USE_HALL_SENSORS: {
+    // byte 39: idle current offset calibrated by the firmware (0xFF = not
+    // calibrated yet). It was 'use hall sensors' in the original AM32; keep it
+    // as a plain round-tripped byte so a save never destroys the calibration.
+    CURRENT_OFFSET: {
         offset: 0x27,
         size: 1
     },
@@ -218,9 +221,14 @@ export const EepromLayout = {
         offset: 0x30,
         size: 1
     },
-    STARTUP_MELODY: {
+    // 0 = off, 1 = low, 2 = high (blank 0xFF is treated as off by the firmware)
+    DEMAG_COMPENSATION: {
         offset: 0x31,
-        size: 127
+        size: 1
+    },
+    STARTUP_MELODY: {
+        offset: 0x32,
+        size: 126
     },
     CAN_SETTINGS: {
         offset: 0xB0,

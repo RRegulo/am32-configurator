@@ -27,8 +27,8 @@ export default function (settingsObject: McuSettings, eepromVersion: number) {
         } else if (size > 2) {
             const { length } = settingsObject[prop] as any[];
             for (let i = 0; i < size; i += 1) {
-                if (prop === 'STARTUP_MELODY') {
-                    array[offset + i] = i < length ? (value as unknown as any[])[i] % 256 : 0;
+                if (prop === 'STARTUP_MELODY' || prop === 'CAN_SETTINGS') {
+                    array[offset + i] = i < length ? (value as unknown as any[])[i] % 256 : (prop === 'CAN_SETTINGS' ? 0xFF : 0);
                 } else {
                     array[offset + i] = i < length ? (value as unknown as string).charCodeAt(i) : ' '.charCodeAt(0);
                 }

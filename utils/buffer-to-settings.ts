@@ -20,7 +20,7 @@ export default function (buffer: Uint8Array, eepromVersion: number) {
         } else if (size === 2) {
             object[prop] = (buffer[offset] << 8) | buffer[offset + 1];
         } else if (size > 2) {
-            if (prop === 'STARTUP_MELODY') {
+            if (prop === 'STARTUP_MELODY' || prop === 'CAN_SETTINGS') {
                 object[prop] = buffer.subarray(offset, offset + size);
                 object[prop] = Array.from(object[prop] as Uint8Array);
             } else {
