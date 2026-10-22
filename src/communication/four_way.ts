@@ -193,7 +193,7 @@ export class FourWay {
 
             // Override NAME with our custom brand name
             try {
-                (mcu.getInfo().settings as any).NAME = 'GOODRONE_ESC';
+                (mcu.getInfo().settings as any).NAME = 'REGULO_ESC';
             } catch (e) {
                 // ignore
             }

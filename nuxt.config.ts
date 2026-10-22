@@ -1,6 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
-    // Site is deployed under https://goodroneru.ru/configurator/
+    // Site is deployed under https://regulo.ru/configurator/
     app: {
         baseURL: '/configurator/'
     },

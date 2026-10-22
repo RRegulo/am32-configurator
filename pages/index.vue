@@ -66,7 +66,7 @@
                   Join our Telegram channel for support and community interaction.
                 </p>
                 <UButton
-                  to="https://t.me/GoodRoneRnD"
+                  to="https://t.me/ReguloRnd"
                   target="_blank"
                   icon="i-mdi-telegram"
                   variant="outline"
