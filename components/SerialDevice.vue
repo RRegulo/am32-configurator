@@ -529,8 +529,37 @@ const isFetchingReleases = computed(() => status.value === 'pending' || firmware
 
 const assets = computed(() => (releases.value?.[0]?.children.find(c => c.name === selectedRelease.value)?.files.map(f => f.name)));
 
+// Newest version first; for the same version the plain release ("2.4.0")
+// comes before its variants ("2.4.0 soft"), so it is the default choice.
+const parseReleaseName = (name: string) => {
+    const m = name.match(/^v?(\d+)\.(\d+)(?:\.(\d+))?(.*)$/i);
+    return m
+        ? { v: [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)], suffix: m[4].trim() }
+        : { v: [-1, -1, -1], suffix: name };
+};
+
+const compareReleaseNames = (a: string, b: string) => {
+    const ra = parseReleaseName(a);
+    const rb = parseReleaseName(b);
+    for (let i = 0; i < 3; i++) {
+        if (ra.v[i] !== rb.v[i]) {
+            return rb.v[i] - ra.v[i];
+        }
+    }
+    if (ra.suffix === rb.suffix) {
+        return 0;
+    }
+    if (!ra.suffix) {
+        return -1;
+    }
+    if (!rb.suffix) {
+        return 1;
+    }
+    return ra.suffix.localeCompare(rb.suffix);
+};
+
 const releasesOptions = computed(() => {
-    return (releases.value?.[0]?.children.map(c => c.name) ?? []).sort((a, b) => b.localeCompare(a));
+    return (releases.value?.[0]?.children.map(c => c.name) ?? []).sort(compareReleaseNames);
 });
 
 const releaseNotes = computed<Record<string, string>>(() => {

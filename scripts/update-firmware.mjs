@@ -81,8 +81,6 @@ try {
         throw new Error('no stable releases with firmware assets found');
     }
 
-    entries.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }));
-
     let currentIndex = null;
     try {
         if ((await stat(INDEX_PATH)).isFile()) {
@@ -91,6 +89,24 @@ try {
     } catch {
         // no existing file
     }
+
+    // Keep hand-added releases (static builds under public/firmware with a
+    // name that is not a GitHub release, e.g. "2.4.0 soft", "2.3.0 dt60"), and
+    // keep the badge note of releases that also exist on GitHub.
+    const ghNames = new Set(entries.map(e => e.name));
+    for (const entry of entries) {
+        const old = currentIndex?.releases?.find(r => r.name === entry.name);
+        if (old?.note) {
+            entry.note = old.note;
+        }
+    }
+    for (const old of currentIndex?.releases ?? []) {
+        if (!ghNames.has(old.name)) {
+            entries.push(old);
+        }
+    }
+
+    entries.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }));
 
     // Skip writing when nothing changed, to avoid build-time git churn
     if (currentIndex?.releases && JSON.stringify(currentIndex.releases) === JSON.stringify(entries)) {
