@@ -445,7 +445,7 @@ import db from '~/src/db';
 import Flash from '~/src/flash';
 import Mcu, { type EscData, type McuInfo } from '~/src/mcu';
 
-// Signature → hex filename candidates for GooDroneru/esc-firmware releases.
+// Signature → hex filename candidates for RRegulo/esc-firmware releases.
 // The K1921VK035 asset was renamed niiet -> vk035; keep both so old releases
 // (which still ship esc-firmware-niiet.hex) and new ones (esc-firmware-vk035.hex)
 // both resolve.

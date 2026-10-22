@@ -50,7 +50,7 @@
                 </p>
                 <p class="mb-4">
                   Visit the <a
-                    href="https://github.com/GooDroneru/esc-firmware/releases"
+                    href="https://github.com/RRegulo/esc-firmware/releases"
                     target="_blank"
                     external
                     class="underline text-red-400"

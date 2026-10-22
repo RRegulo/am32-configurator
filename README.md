@@ -13,7 +13,7 @@ Web-based configurator for AM32 ESC firmware. Supports 4-way interface and direc
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/GooDroneru/am32-configurator.git
+git clone https://github.com/RRegulo/am32-configurator.git
 cd am32-configurator
 ```
 

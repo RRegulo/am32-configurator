@@ -38,7 +38,7 @@
       "files": [
         {
           "name": "esc-firmware-vg5t.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.3.0/esc-firmware-vg5t.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.3.0/esc-firmware-vg5t.bin"
         },
         {
           "name": "esc-firmware-vg5t.hex",
@@ -46,7 +46,7 @@
         },
         {
           "name": "esc-firmware-vk035.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.3.0/esc-firmware-vk035.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.3.0/esc-firmware-vk035.bin"
         },
         {
           "name": "esc-firmware-vk035.hex",
@@ -54,7 +54,7 @@
         },
         {
           "name": "esc-firmware-wch.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.3.0/esc-firmware-wch.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.3.0/esc-firmware-wch.bin"
         },
         {
           "name": "esc-firmware-wch.hex",
@@ -68,7 +68,7 @@
       "files": [
         {
           "name": "esc-firmware-niiet.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.2.0/esc-firmware-niiet.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.2.0/esc-firmware-niiet.bin"
         },
         {
           "name": "esc-firmware-niiet.hex",
@@ -76,7 +76,7 @@
         },
         {
           "name": "esc-firmware-wch.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.2.0/esc-firmware-wch.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.2.0/esc-firmware-wch.bin"
         },
         {
           "name": "esc-firmware-wch.hex",
@@ -90,7 +90,7 @@
       "files": [
         {
           "name": "esc-firmware-niiet.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.1.0/esc-firmware-niiet.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.1.0/esc-firmware-niiet.bin"
         },
         {
           "name": "esc-firmware-niiet.hex",
@@ -98,7 +98,7 @@
         },
         {
           "name": "esc-firmware-wch.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.1.0/esc-firmware-wch.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.1.0/esc-firmware-wch.bin"
         },
         {
           "name": "esc-firmware-wch.hex",
@@ -112,7 +112,7 @@
       "files": [
         {
           "name": "esc-firmware-niiet.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.0.0/esc-firmware-niiet.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.0.0/esc-firmware-niiet.bin"
         },
         {
           "name": "esc-firmware-niiet.hex",
@@ -120,7 +120,7 @@
         },
         {
           "name": "esc-firmware-wch.bin",
-          "url": "https://github.com/GooDroneru/esc-firmware/releases/download/2.0.0/esc-firmware-wch.bin"
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.0.0/esc-firmware-wch.bin"
         },
         {
           "name": "esc-firmware-wch.hex",

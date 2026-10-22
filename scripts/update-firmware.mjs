@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const execFileAsync = promisify(execFile);
 
-const REPO = 'GooDroneru/esc-firmware';
+const REPO = 'RRegulo/esc-firmware';
 const INDEX_PATH = `${fileURLToPath(new URL('../', import.meta.url))}public/firmware/index.json`;
 const USER_AGENT = 'am32-configurator';
 
