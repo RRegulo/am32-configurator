@@ -223,6 +223,8 @@
                     }, {
                       field: 'DEMAG_COMPENSATION',
                       name: 'Demag compensation',
+                      help: 'Компенсация размагничивания (по схеме Bluejay): при большой нагрузке учитывает задержку перехода через ноль после коммутации и снижает риск срыва (desync). Low — мягче, High — сильнее. Доступно с прошивки 2.4.',
+                      minFirmwareVersion: 'v2.4',
                       values: [{
                         name: 'Off',
                         value: 0
