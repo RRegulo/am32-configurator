@@ -4,7 +4,6 @@
     {
       "name": "2.4.0",
       "prerelease": false,
-      "note": "demag + ardu",
       "files": [
         {
           "name": "esc-firmware-vg5t.bin",
@@ -35,7 +34,6 @@
     {
       "name": "2.3.1",
       "prerelease": false,
-      "note": "ardu",
       "files": [
         {
           "name": "esc-firmware-vg5t.bin",
