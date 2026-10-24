@@ -55,10 +55,27 @@ export const DEFAULT_ESC_CONFIG: Record<string, number> = {
     SERVO_DEAD_BAND: 50
 };
 
+// Per-MCU changes on top of DEFAULT_ESC_CONFIG, keyed by the bootloader
+// signature (meta.signature, see src/mcu.ts).
+export const MCU_DEFAULT_OVERRIDES: Record<number, Record<string, number>> = {
+    // CH32V203: start in polling mode, "No polling start" off
+    0x1F06: {
+        NO_POLLING_START: 0
+    }
+};
+
+export function getDefaultEscConfig (signature?: number): Record<string, number> {
+    return {
+        ...DEFAULT_ESC_CONFIG,
+        ...(signature !== undefined ? MCU_DEFAULT_OVERRIDES[signature] ?? {} : {})
+    };
+}
+
 export function applyDefaultEscConfig (escList: any[]) {
     for (const esc of escList) {
-        (Object.keys(DEFAULT_ESC_CONFIG) as Array<keyof typeof DEFAULT_ESC_CONFIG>).forEach((key) => {
-            esc.settings[key] = DEFAULT_ESC_CONFIG[key];
+        const config = getDefaultEscConfig(esc.meta?.signature);
+        Object.keys(config).forEach((key) => {
+            esc.settings[key] = config[key];
         });
         esc.settingsDirty = true;
     }

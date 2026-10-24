@@ -1,10 +1,10 @@
 {
-  "generated": "2026-10-23T00:00:00.000Z",
+  "generated": "2026-10-24T00:00:00.000Z",
   "releases": [
     {
       "name": "2.4.0",
       "prerelease": false,
-      "note": "demag",
+      "note": "demag + ardu",
       "files": [
         {
           "name": "esc-firmware-vg5t.bin",
@@ -29,68 +29,6 @@
         {
           "name": "esc-firmware-wch.hex",
           "url": "firmware/2.4.0/esc-firmware-wch.hex"
-        }
-      ]
-    },
-    {
-      "name": "2.4.0 soft",
-      "prerelease": false,
-      "note": "soft start",
-      "files": [
-        {
-          "name": "esc-firmware-vg5t.bin",
-          "url": "firmware/2.4.0-soft/esc-firmware-vg5t.bin"
-        },
-        {
-          "name": "esc-firmware-vg5t.hex",
-          "url": "firmware/2.4.0-soft/esc-firmware-vg5t.hex"
-        },
-        {
-          "name": "esc-firmware-vk035.bin",
-          "url": "firmware/2.4.0-soft/esc-firmware-vk035.bin"
-        },
-        {
-          "name": "esc-firmware-vk035.hex",
-          "url": "firmware/2.4.0-soft/esc-firmware-vk035.hex"
-        },
-        {
-          "name": "esc-firmware-wch.bin",
-          "url": "firmware/2.4.0-soft/esc-firmware-wch.bin"
-        },
-        {
-          "name": "esc-firmware-wch.hex",
-          "url": "firmware/2.4.0-soft/esc-firmware-wch.hex"
-        }
-      ]
-    },
-    {
-      "name": "2.3.0 dt60",
-      "prerelease": false,
-      "note": "deadtime 60",
-      "files": [
-        {
-          "name": "esc-firmware-vg5t.bin",
-          "url": "firmware/2.3.0-dt60/esc-firmware-vg5t.bin"
-        },
-        {
-          "name": "esc-firmware-vg5t.hex",
-          "url": "firmware/2.3.0-dt60/esc-firmware-vg5t.hex"
-        },
-        {
-          "name": "esc-firmware-vk035.bin",
-          "url": "firmware/2.3.0-dt60/esc-firmware-vk035.bin"
-        },
-        {
-          "name": "esc-firmware-vk035.hex",
-          "url": "firmware/2.3.0-dt60/esc-firmware-vk035.hex"
-        },
-        {
-          "name": "esc-firmware-wch.bin",
-          "url": "firmware/2.3.0-dt60/esc-firmware-wch.bin"
-        },
-        {
-          "name": "esc-firmware-wch.hex",
-          "url": "firmware/2.3.0-dt60/esc-firmware-wch.hex"
         }
       ]
     },
