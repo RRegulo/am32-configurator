@@ -43,11 +43,41 @@
             </div>
           </template>
         </UAccordion>
+        <UCard>
+          <template #header>
+            <div class="flex items-center gap-2 text-lg font-bold">
+              <UIcon name="i-material-symbols-menu-book-outline" class="h-6 w-6" />
+              Инструкции
+            </div>
+          </template>
+          <div class="flex flex-col gap-2">
+            <ULink
+              v-for="doc of docs"
+              :key="doc.file"
+              :to="`${baseURL}docs/${doc.file}`"
+              target="_blank"
+              external
+              class="transition-all hover:text-red-500 text-blue-400"
+            >
+              {{ doc.title }}
+            </ULink>
+          </div>
+        </UCard>
       </div>
     </div>
   </div>
 </template>
 <script setup lang="ts">
+const baseURL = useRuntimeConfig().app.baseURL;
+const docs = [
+    { title: 'Регулятор ESC12S80A — руководство по эксплуатации', file: 'Regulo_ESC12S80A_manual_rev1.pdf' },
+    { title: '4-в-1 ESC12S80A (K1946VK035) — руководство по эксплуатации', file: 'Regulo_4ESC12S80A_K1946VK035_manual_1.1.0.pdf' },
+    { title: '4-в-1 ESC12S80A (CH32V203) — руководство по эксплуатации', file: 'Regulo_4ESC12S80A_CH32V203_manual_1.0.0.pdf' },
+    { title: 'BEC12S5A / BEC12S4A — руководство по эксплуатации', file: 'Regulo_BEC12S5A_BEC12S4A_manual_1.0.pdf' },
+    { title: 'PDB12S400A / PDB12S600A — руководство по эксплуатации', file: 'Regulo_PDB12S400A_PDB12S600A_manual_1.0.pdf' },
+    { title: 'Конфигуратор — руководство пользователя', file: 'Regulo_Configurator_guide_1.0.pdf' }
+];
+
 const { data, status } = await useLazyFetch('/api/files?filter=bootloader,tools&prereleases');
 
 const rootFolders = ref<{
