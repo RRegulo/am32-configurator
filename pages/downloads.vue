@@ -43,40 +43,6 @@
             </div>
           </template>
         </UAccordion>
-        <UCard>
-          <template #header>
-            <div class="flex items-center gap-2 text-lg font-bold">
-              <UIcon name="i-material-symbols-menu-book-outline" class="h-6 w-6" />
-              Инструкции
-            </div>
-          </template>
-          <div class="flex flex-col gap-2">
-            <ULink
-              to="https://disk.yandex.com/i/BYI8WHBuXvtj6w"
-              target="_blank"
-              external
-              class="transition-all hover:text-red-500 text-blue-400"
-            >
-              Инструкция GD80V1
-            </ULink>
-            <ULink
-              to="https://disk.yandex.ru/i/3SbqDBOG0u3nWw"
-              target="_blank"
-              external
-              class="transition-all hover:text-red-500 text-blue-400"
-            >
-              Инструкция GD80V2 4in1
-            </ULink>
-            <ULink
-              to="https://disk.yandex.ru/i/YLY2co8TweQr6g"
-              target="_blank"
-              external
-              class="transition-all hover:text-red-500 text-blue-400"
-            >
-              Инструкция GD80V1 4in1
-            </ULink>
-          </div>
-        </UCard>
       </div>
     </div>
   </div>
