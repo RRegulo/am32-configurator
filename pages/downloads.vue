@@ -55,7 +55,7 @@
               v-for="doc of docs"
               :key="doc.file"
               :to="`${baseURL}docs/${doc.file}`"
-              target="_blank"
+              :download="doc.file"
               external
               class="transition-all hover:text-red-500 text-blue-400"
             >
