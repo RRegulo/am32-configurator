@@ -1,4 +1,5 @@
-import type { EscData } from '~/src/mcu';
+import type { EscData, ValidEscData } from '~/src/mcu';
+import { isValidEscData } from '~/src/mcu';
 
 export const useEscStore = defineStore('esc', () => {
     const count = ref(0);
@@ -6,8 +7,8 @@ export const useEscStore = defineStore('esc', () => {
 
     const escData = ref<EscData[]>([]);
 
-    const selectedEscInfo = computed(() => escData.value.filter(e => !e.isError && e.data?.isSelected).map(e => e.data) ?? []);
-    const firstValidEscData = computed(() => escData.value?.find(d => !d.isError && d.data));
+    const selectedEscInfo = computed(() => escData.value.filter(isValidEscData).filter(e => e.data.isSelected).map(e => e.data));
+    const firstValidEscData = computed<ValidEscData | undefined>(() => escData.value?.find(isValidEscData));
 
     const settingsDirty = ref(false);
     const isSaving = ref(false);

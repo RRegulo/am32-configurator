@@ -168,6 +168,10 @@ const rtttlValue = computed({
     get: () => {
         let arr = props.escInfo[props.individual ?? 0].settings[props.field] as number[];
 
+        if (!arr) {
+            return '';
+        }
+
         for (let i = 0; i < arr.length - 1; ++i) {
             if (
                 (arr[i] === 0x0 && arr[i + 1] === 0x0) ||
@@ -178,7 +182,20 @@ const rtttlValue = computed({
             }
         }
 
-        return Rtttl.fromBluejayStartupMelody(new Uint8Array(arr));
+        const decoded = Rtttl.fromBluejayStartupMelody(new Uint8Array(arr));
+
+        // Unset melody regions contain junk (e.g. factory flash data) that decodes
+        // into absurd header values — show the empty placeholder for those
+        const header = decoded.match(/^Melody:b=(\d+),o=(\d+),d=(\d+)/);
+        if (!header ||
+            Number(header[2]) > 8 ||
+            Number(header[3]) > 32 ||
+            Number(header[1]) < 25 ||
+            Number(header[1]) > 900) {
+            return '';
+        }
+
+        return decoded;
     },
     set: (val) => {
         if (val !== rtttlValue.value) {

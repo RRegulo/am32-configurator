@@ -4,54 +4,8 @@
       <div v-if="status === 'pending'" class="text-4xl text-center text-red-500 p-5">
         <UIcon name="i-svg-spinners-blocks-wave" />
       </div>
-      <div v-else-if="links">
-        <UInput
-          v-model="filter"
-          class="mb-4"
-          placeholder="Highlight..."
-          icon="i-material-symbols-filter-alt"
-          :ui="{ icon: { trailing: { pointer: '' } } }"
-          autocomplete="off"
-        >
-          <template #trailing>
-            <UButton
-              v-show="filter !== ''"
-              color="gray"
-              variant="link"
-              icon="i-heroicons-x-mark-20-solid"
-              :padded="false"
-              @click="filter = ''"
-            />
-          </template>
-        </UInput>
-        <UAccordion :items="rootFolders" multiple>
-          <template #releases_data>
-            <div v-if="getFolder('releases').value" class="p-4">
-              <UAccordion color="teal" :items="getChildrenFolder(getFolder('releases').value)" variant="outline" size="sm">
-                <template #files="{ item }">
-                  <div class="grid grid-cols-4">
-                    <div v-for="file of item.files" :key="file" class="py-1">
-                      <ULink
-                        :to="file.url"
-                        external
-                        :download="file.name"
-                        class="transition-all hover:text-red-500"
-                        :class="{
-                          'text-gray-500/20': filter && !file.name.toLowerCase().includes(filter.toLowerCase()),
-                          'text-red-500': filter && file.name.toLowerCase().includes(filter.toLowerCase())
-                        }"
-                      >
-                        {{ file.name }}
-                      </ULink>
-                    </div>
-                  </div>
-                </template>
-              </UAccordion>
-            </div>
-            <div v-else>
-              No releases
-            </div>
-          </template>
+      <div v-else class="flex flex-col gap-4">
+        <UAccordion v-if="rootFolders.length > 0" :items="rootFolders" multiple>
           <template #tools_data>
             <div v-if="getFolder('tools').value" class="p-4">
               <div class="grid grid-cols-4">
@@ -60,11 +14,7 @@
                     :to="`${file.url}`"
                     external
                     :download="file.name"
-                    class="transition-all hover:text-green-500"
-                    :class="{
-                      'text-gray-500/20': filter && !file.name.toLowerCase().includes(filter.toLowerCase()),
-                      'text-red-500': filter && file.name.toLowerCase().includes(filter.toLowerCase())
-                    }"
+                    class="transition-all text-gray-300 hover:text-green-500"
                   >
                     {{ file.name }}
                   </ULink>
@@ -82,11 +32,7 @@
                         :to="file.url"
                         external
                         :download="file.name"
-                        class="transition-all hover:text-red-500"
-                        :class="{
-                          'text-gray-500/20': filter && !file.name.toLowerCase().includes(filter.toLowerCase()),
-                          'text-red-500': filter && file.name.toLowerCase().includes(filter.toLowerCase())
-                        }"
+                        class="transition-all text-gray-300 hover:text-red-500"
                       >
                         {{ file.name }}
                       </ULink>
@@ -97,32 +43,59 @@
             </div>
           </template>
         </UAccordion>
+        <UCard>
+          <template #header>
+            <div class="flex items-center gap-2 text-lg font-bold">
+              <UIcon name="i-material-symbols-menu-book-outline" class="h-6 w-6" />
+              Инструкции
+            </div>
+          </template>
+          <div class="flex flex-col gap-2">
+            <ULink
+              v-for="doc of docs"
+              :key="doc.file"
+              :to="`${baseURL}docs/${doc.file}`"
+              :download="doc.file"
+              external
+              class="transition-all hover:text-red-500 text-blue-400"
+            >
+              {{ doc.title }}
+            </ULink>
+          </div>
+        </UCard>
       </div>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-const { data, status } = await useLazyFetch('/api/files?prereleases');
+const baseURL = useRuntimeConfig().app.baseURL;
+const docs = [
+    { title: 'Регулятор ESC12S80A (все исполнения) — руководство по эксплуатации', file: 'Regulo_ESC12S80A_manual_rev2.pdf' },
+    { title: '4-в-1 ESC12S80A (все исполнения) — руководство по эксплуатации', file: 'Regulo_4ESC12S80A_manual_1.2.0.pdf' },
+    { title: 'BEC12S5A / BEC12S4A — руководство по эксплуатации', file: 'Regulo_BEC12S5A_BEC12S4A_manual_1.0.pdf' },
+    { title: 'PDB12S400A / PDB12S600A — руководство по эксплуатации', file: 'Regulo_PDB12S400A_PDB12S600A_manual_1.0.pdf' },
+    { title: 'Конфигуратор — руководство пользователя', file: 'Regulo_Configurator_guide_1.0.pdf' }
+];
 
-const filter = ref('');
+const { data, status } = await useLazyFetch('/api/files?filter=bootloader,tools&prereleases');
 
-watchEffect(() => {
-    if (status.value !== 'pending' && data.value) {
-        links.value = data.value.data;
-        rootFolders.value = data.value.data.map((f) => {
-            return {
-                label: f.name?.toUpperCase() ?? 'ERROR',
-                slot: `${f.name}_data`
-            };
-        });
-    }
-});
-
-const links = ref<BlobFolder[]>([]);
 const rootFolders = ref<{
   label: string,
   slot: string
 }[]>([]);
+
+watchEffect(() => {
+    if (status.value !== 'pending' && data.value) {
+        rootFolders.value = data.value.data
+            .filter(f => f.name === 'bootloader' || f.name === 'tools')
+            .map((f) => {
+                return {
+                    label: f.name?.toUpperCase() ?? 'ERROR',
+                    slot: `${f.name}_data`
+                };
+            });
+    }
+});
 
 const getFolder = (name: string) => computed(() => {
     return data.value?.data.find(b => b.name === name) ?? null;

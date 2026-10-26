@@ -36,11 +36,15 @@ const links = computed(() => [{
     icon: 'i-heroicons-home',
     to: '/'
 }, {
-    label: 'Configurator',
+    label: 'Конфигуратор',
     icon: 'i-heroicons-cpu-chip-16-solid',
     to: '/configurator'
 }, {
-    label: 'Downloads',
+    label: 'Тест моторов',
+    icon: 'i-material-symbols-speed',
+    to: '/test'
+}, {
+    label: 'Загрузки',
     icon: 'i-material-symbols-download-rounded',
     to: '/downloads'
 }]);

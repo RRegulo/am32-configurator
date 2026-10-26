@@ -51,4 +51,14 @@
 import logo from '~/assets/icons/am32-logo.svg';
 const serialStore = useSerialStore();
 const logStore = useLogStore();
+
+// Each page manages its own connection: navigating away force-disconnects,
+// the target page (e.g. motor test) connects on its own
+const disconnectFromDevice = useSerialDisconnect();
+const router = useRouter();
+router.beforeEach(async (to, from) => {
+    if (to.path !== from.path && serialStore.hasConnection) {
+        await disconnectFromDevice();
+    }
+});
 </script>

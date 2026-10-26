@@ -10,7 +10,7 @@ export type EepromLayoutField = {
 }
 
 export const EepromLayout = {
-    BOOT_BYTE: {
+    NO_POLLING_START: {
         offset: 0x00,
         size: 1
     },
@@ -69,6 +69,26 @@ export const EepromLayout = {
         offset: 0x0C,
         size: 1,
         minEepromVersion: 3
+    },
+    BRAKE_ON_ZERO_THROTTLE: {
+        offset: 0x0D,
+        size: 1,
+        minEepromVersion: 3
+    },
+    DRIVE_BY_RPM: {
+        offset: 0x0E,
+        size: 1,
+        minEepromVersion: 4
+    },
+    MAXIMUM_RPM: {
+        offset: 0x0F,
+        size: 1,
+        minEepromVersion: 4
+    },
+    MINIMUM_RPM: {
+        offset: 0x10,
+        size: 1,
+        minEepromVersion: 4
     },
     MOTOR_DIRECTION: {
         offset: 0x11,
@@ -158,7 +178,10 @@ export const EepromLayout = {
         offset: 0x26,
         size: 1
     },
-    USE_HALL_SENSORS: {
+    // byte 39: idle current offset calibrated by the firmware (0xFF = not
+    // calibrated yet). It was 'use hall sensors' in the original AM32; keep it
+    // as a plain round-tripped byte so a save never destroys the calibration.
+    CURRENT_OFFSET: {
         offset: 0x27,
         size: 1
     },
@@ -194,9 +217,18 @@ export const EepromLayout = {
         offset: 0x2F,
         size: 1
     },
-    STARTUP_MELODY: {
+    MAXIMUM_DUTY_CYCLE: {
         offset: 0x30,
-        size: 128
+        size: 1
+    },
+    // 0 = off, 1 = low, 2 = high (blank 0xFF is treated as off by the firmware)
+    DEMAG_COMPENSATION: {
+        offset: 0x31,
+        size: 1
+    },
+    STARTUP_MELODY: {
+        offset: 0x32,
+        size: 126
     },
     CAN_SETTINGS: {
         offset: 0xB0,
@@ -210,3 +242,20 @@ export type EepromLayoutValues = typeof EepromLayout[EepromLayoutKeys];
 export type McuSettings = {
     [key in EepromLayoutKeys as string]: number | number[] | Uint8Array | string;
 };
+
+// Highest EEPROM layout revision understood by this build (firmware EEPROM_VERSION).
+export const EEPROM_VERSION_MAX = 4;
+
+// Integrity check mirrored from the firmware's loadEEpromSettings(): a valid
+// settings block has a non-blank layout/eeprom version in [1..EEPROM_VERSION_MAX]
+// and a bootloader-stamped bootloader version. Never use byte 0
+// (NO_POLLING_START) as a validity marker - it is a real setting and 0 is valid.
+export function isEepromValid (settings: Partial<Record<EepromLayoutKeys, unknown>> | null | undefined): boolean {
+    if (!settings) {
+        return false;
+    }
+    const version = Number(settings.LAYOUT_REVISION);
+    const bootloader = Number(settings.BOOT_LOADER_REVISION);
+    return Number.isFinite(version) && version >= 1 && version <= EEPROM_VERSION_MAX &&
+        Number.isFinite(bootloader) && bootloader !== 0 && bootloader !== 0xFF;
+}

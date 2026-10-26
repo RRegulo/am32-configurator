@@ -1,0 +1,161 @@
+{
+  "generated": "2026-10-24T00:00:00.000Z",
+  "releases": [
+    {
+      "name": "2.4.0",
+      "prerelease": false,
+      "files": [
+        {
+          "name": "esc-firmware-vg5t.bin",
+          "url": "firmware/2.4.0/esc-firmware-vg5t.bin"
+        },
+        {
+          "name": "esc-firmware-vg5t.hex",
+          "url": "firmware/2.4.0/esc-firmware-vg5t.hex"
+        },
+        {
+          "name": "esc-firmware-vk035.bin",
+          "url": "firmware/2.4.0/esc-firmware-vk035.bin"
+        },
+        {
+          "name": "esc-firmware-vk035.hex",
+          "url": "firmware/2.4.0/esc-firmware-vk035.hex"
+        },
+        {
+          "name": "esc-firmware-wch.bin",
+          "url": "firmware/2.4.0/esc-firmware-wch.bin"
+        },
+        {
+          "name": "esc-firmware-wch.hex",
+          "url": "firmware/2.4.0/esc-firmware-wch.hex"
+        }
+      ]
+    },
+    {
+      "name": "2.3.1",
+      "prerelease": false,
+      "files": [
+        {
+          "name": "esc-firmware-vg5t.bin",
+          "url": "firmware/2.3.1/esc-firmware-vg5t.bin"
+        },
+        {
+          "name": "esc-firmware-vg5t.hex",
+          "url": "firmware/2.3.1/esc-firmware-vg5t.hex"
+        },
+        {
+          "name": "esc-firmware-vk035.bin",
+          "url": "firmware/2.3.1/esc-firmware-vk035.bin"
+        },
+        {
+          "name": "esc-firmware-vk035.hex",
+          "url": "firmware/2.3.1/esc-firmware-vk035.hex"
+        },
+        {
+          "name": "esc-firmware-wch.bin",
+          "url": "firmware/2.3.1/esc-firmware-wch.bin"
+        },
+        {
+          "name": "esc-firmware-wch.hex",
+          "url": "firmware/2.3.1/esc-firmware-wch.hex"
+        }
+      ]
+    },
+    {
+      "name": "2.3.0",
+      "prerelease": false,
+      "files": [
+        {
+          "name": "esc-firmware-vg5t.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.3.0/esc-firmware-vg5t.bin"
+        },
+        {
+          "name": "esc-firmware-vg5t.hex",
+          "url": "firmware/2.3.0/esc-firmware-vg5t.hex"
+        },
+        {
+          "name": "esc-firmware-vk035.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.3.0/esc-firmware-vk035.bin"
+        },
+        {
+          "name": "esc-firmware-vk035.hex",
+          "url": "firmware/2.3.0/esc-firmware-vk035.hex"
+        },
+        {
+          "name": "esc-firmware-wch.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.3.0/esc-firmware-wch.bin"
+        },
+        {
+          "name": "esc-firmware-wch.hex",
+          "url": "firmware/2.3.0/esc-firmware-wch.hex"
+        }
+      ]
+    },
+    {
+      "name": "2.2.0",
+      "prerelease": false,
+      "files": [
+        {
+          "name": "esc-firmware-niiet.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.2.0/esc-firmware-niiet.bin"
+        },
+        {
+          "name": "esc-firmware-niiet.hex",
+          "url": "firmware/2.2.0/esc-firmware-niiet.hex"
+        },
+        {
+          "name": "esc-firmware-wch.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.2.0/esc-firmware-wch.bin"
+        },
+        {
+          "name": "esc-firmware-wch.hex",
+          "url": "firmware/2.2.0/esc-firmware-wch.hex"
+        }
+      ]
+    },
+    {
+      "name": "2.1.0",
+      "prerelease": false,
+      "files": [
+        {
+          "name": "esc-firmware-niiet.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.1.0/esc-firmware-niiet.bin"
+        },
+        {
+          "name": "esc-firmware-niiet.hex",
+          "url": "firmware/2.1.0/esc-firmware-niiet.hex"
+        },
+        {
+          "name": "esc-firmware-wch.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.1.0/esc-firmware-wch.bin"
+        },
+        {
+          "name": "esc-firmware-wch.hex",
+          "url": "firmware/2.1.0/esc-firmware-wch.hex"
+        }
+      ]
+    },
+    {
+      "name": "2.0.0",
+      "prerelease": false,
+      "files": [
+        {
+          "name": "esc-firmware-niiet.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.0.0/esc-firmware-niiet.bin"
+        },
+        {
+          "name": "esc-firmware-niiet.hex",
+          "url": "firmware/2.0.0/esc-firmware-niiet.hex"
+        },
+        {
+          "name": "esc-firmware-wch.bin",
+          "url": "https://github.com/RRegulo/esc-firmware/releases/download/2.0.0/esc-firmware-wch.bin"
+        },
+        {
+          "name": "esc-firmware-wch.hex",
+          "url": "firmware/2.0.0/esc-firmware-wch.hex"
+        }
+      ]
+    }
+  ]
+}

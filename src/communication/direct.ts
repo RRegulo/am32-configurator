@@ -307,6 +307,22 @@ export class Direct {
         }
     }
 
+    async eraseFirmware (firmwareStart: number, eepromOffset: number, chunkSize = 64) {
+        // Clear the "application valid" boot bit so the MCU stays in the
+        // bootloader instead of running the zeroed image.
+        const settings = await this.readChunked(eepromOffset, Mcu.LAYOUT_SIZE, 32);
+        if (settings && settings.length >= Mcu.LAYOUT_SIZE) {
+            settings[0] = 0x00;
+            await this.writeChunked(eepromOffset, settings);
+        }
+
+        const zeros = new Uint8Array(chunkSize);
+        for (let address = firmwareStart; address < eepromOffset; address += chunkSize) {
+            const n = Math.min(chunkSize, eepromOffset - address);
+            await this.writeBufferToAddress(address, zeros.subarray(0, n));
+        }
+    }
+
     flashHex (hex: Hex) {
         console.log(hex);
     }

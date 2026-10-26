@@ -5,11 +5,19 @@
     </div>
     <div class="flex">
       <div v-if="filteredSwitches.length > 0 || filteredRadios.length > 0" class="p-4">
-        <div v-for="{ field, name, setValue } of filteredSwitches" :key="field">
+        <div v-for="{ field, name, help, setValue } of filteredSwitches" :key="field" class="flex items-center gap-1">
           <UCheckbox v-model="boolModel(field, setValue).value" :label="name" />
+          <UTooltip v-if="help" :text="help" :popper="{ placement: 'right' }">
+            <UIcon name="i-material-symbols-help-outline" class="text-blue-500 text-lg" />
+          </UTooltip>
         </div>
-        <div v-for="{ field, name, values } of filteredRadios" :key="field" :label="name">
-          <div>{{ name }}</div>
+        <div v-for="{ field, name, help, values } of filteredRadios" :key="field" :label="name">
+          <div class="flex items-center gap-1">
+            {{ name }}
+            <UTooltip v-if="help" :text="help" :popper="{ placement: 'right' }">
+              <UIcon name="i-material-symbols-help-outline" class="text-blue-500 text-lg" />
+            </UTooltip>
+          </div>
           <URadioGroup v-model="model(field).value" class="ml-2" :options="values.map(v => ({ label: v.name, value: v.value }))" value-key="value" label-key="name" />
         </div>
       </div>
@@ -35,6 +43,7 @@ const escStore = useEscStore();
 interface SwitchType {
   field: EepromLayoutKeys;
   name: string;
+  help?: string;
   setValue?: number;
   minEepromVersion?: number;
   maxEepromVersion?: number;
@@ -45,6 +54,7 @@ interface SwitchType {
 interface RadioType {
   field: EepromLayoutKeys;
   name: string;
+  help?: string;
   values: { name: string, value: number }[];
   minEepromVersion?: number;
   maxEepromVersion?: number;

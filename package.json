@@ -2,9 +2,9 @@
   "name": "@am32/am32-configurator",
   "type": "module",
   "scripts": {
-    "build": "nuxt build",
+    "build": "node scripts/update-firmware.mjs && nuxt build",
     "dev": "nuxt dev",
-    "generate": "nuxt generate",
+    "generate": "node scripts/update-firmware.mjs && nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "upload:files": "node deploy-files/upload.ts",
