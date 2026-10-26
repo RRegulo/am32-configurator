@@ -6,14 +6,20 @@
         <USelectMenu
           v-model="baudrate"
           class="flex-grow"
-          :disabled="serialStore.selectedDevice.id === '-1' || serialStore.hasConnection || isDirectConnectDevice"
+          :disabled="serialStore.selectedDevice.id === '-1' || serialStore.hasConnection || isDirectConnectDevice || isForceDirectConnect"
           :options="baudrateOptions"
         />
       </div>
       <div class="flex justify-between gap-2">
-        <UButton size="2xs" @click="requestSerialDevices">
-          Port select
-        </UButton>
+        <div class="flex gap-6 items-center">
+          <UButton size="2xs" @click="requestSerialDevices">
+            Port select
+          </UButton>
+          <label class="flex items-center gap-2">
+            Direct
+            <UCheckbox v-model="isForceDirectConnect" :disabled="isDirectConnectDevice || serialStore.hasConnection" />
+          </label>
+        </div>
         <UButton v-if="!serialStore.hasConnection" :disabled="serialStore.selectedDevice.id === '-1'" size="2xs" @click="connectToDevice">
           Connect
         </UButton>
@@ -243,7 +249,7 @@
                 <UButton
                   label="Start flash"
                   :disabled="
-                    (!serialStore.isDirectConnect && savingOrApplyingSelectedEscs.length === 0) ||
+                    (savingOrApplyingSelectedEscs.length === 0) ||
                       (currentTab === 0 && (!selectedAsset || selectedAsset === 'NOT FOUND')) ||
                       (currentTab > 0 && !fileInput)
                   "
@@ -396,7 +402,6 @@ import commandsQueue from '~/src/communication/commands.queue';
 import { DIRECT_COMMANDS, Direct } from '~/src/communication/direct';
 import { FOUR_WAY_COMMANDS, FourWay } from '~/src/communication/four_way';
 import Msp, { MSP_COMMANDS } from '~/src/communication/msp';
-import serial from '~/src/communication/serial';
 import Serial from '~/src/communication/serial';
 import db from '~/src/db';
 import Flash from '~/src/flash';
@@ -407,7 +412,7 @@ const serialStore = useSerialStore();
 const escStore = useEscStore();
 const { escData } = storeToRefs(escStore);
 const { log, logWarning, logError } = useLogStore();
-const usbFCVendorIds = [0x0483, 0x2E3C, 0x2E8A, 0x1209, 0x26AC, 0x27AC, 0x2DAE, 0x3162, 0x35A7];
+const usbFCVendorIds = [0x0483, 0x2E3C, 0x2E8A, 0x1209, 0x26AC, 0x27AC, 0x2DAE, 0x3162, 0x35A7, 0x28E9];
 const usbDirectVendorIds = [0x1A86, 0x0403, 0x4348, 0x26BA, 0x10C4];
 const usbDirectDeviceIdExceptions = [0xE204];
 const flashModalOpen = ref(false);
@@ -509,6 +514,7 @@ const requestSerialDevices = async () => {
     await fetchPairedDevices();
 };
 
+const isForceDirectConnect = ref(false);
 const isDirectConnectDevice = computed(
     () => usbDirectVendorIds.includes(Number.parseInt(serialStore.selectedDevice.id.split(':')[0])) &&
           !usbDirectDeviceIdExceptions.includes(Number.parseInt(serialStore.selectedDevice.id.split(':')[1]))
@@ -521,10 +527,12 @@ const fetchPairedDevices = async () => {
     if (pairedDevices.length > 0) {
         if (serialStore.selectedDevice.id === '-1') {
             serialStore.selectLastDevice();
-            if (serialStore.selectedDevice) {
-                if (isDirectConnectDevice.value) {
-                    baudrate.value = '19200';
-                }
+        }
+
+        if (serialStore.selectedDevice) {
+            if (isDirectConnectDevice.value || isForceDirectConnect.value) {
+                isForceDirectConnect.value = true;
+                baudrate.value = '19200';
             }
         }
     } else {
@@ -603,19 +611,21 @@ const connectToDevice = async () => {
 
                 log('Connected to device');
 
-                if (isDirectConnectDevice.value) {
+                if (isDirectConnectDevice.value || isForceDirectConnect.value) {
+                    serialStore.isDirectConnect = true;
                     connectToEsc();
                 } else {
                     const result = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_API_VERSION).catch(async (err) => {
                         logError(`${err.message}, trying to exit fourway and try again.`);
                         serialStore.isFourWay = true;
                         await FourWay.getInstance().sendWithPromise(FOUR_WAY_COMMANDS.cmd_InterfaceExit);
-                        await delay(1000);
                         serialStore.isFourWay = false;
-                        return Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_API_VERSION).catch(() => {
-                            logError('Not in four way mode? Cant automatically resolve issue! Restart and replug device and try again.');
-                            return null;
-                        });
+                        const recovered = await Msp.getInstance().sendWithRetries(MSP_COMMANDS.MSP_API_VERSION);
+                        if (recovered) {
+                            return recovered;
+                        }
+                        logError('Could not leave four way mode. Restart and replug the device and try again.');
+                        return null;
                     });
 
                     if (result === null) {
@@ -660,7 +670,7 @@ const connectToDevice = async () => {
 };
 
 const connectToEsc = async () => {
-    if (isDirectConnectDevice.value) {
+    if (isDirectConnectDevice.value || isForceDirectConnect.value) {
         escStore.isLoading = true;
 
         serialStore.isDirectConnect = true;
@@ -723,8 +733,11 @@ const connectToEsc = async () => {
 
     if (
         escStore.escData.filter(
-            e => e.data.settingsBuffer.filter(s => s === 0xFF).length === e.data.settingsBuffer.length ||
-                  e.data.settingsBuffer.reduce((acc, cur) => acc + cur, 0) === 0
+            // errored slots never get data assigned - skip them, they must
+            // not crash the empty-settings scan for the healthy ESCs
+            e => !e.isError && e.data?.settingsBuffer.length &&
+                (e.data.settingsBuffer.filter(s => s === 0xFF).length === e.data.settingsBuffer.length ||
+                  e.data.settingsBuffer.reduce((acc, cur) => acc + cur, 0) === 0)
         ).length > 0
     ) {
         toast.add({
@@ -733,7 +746,7 @@ const connectToEsc = async () => {
             description: 'Found empty settings, flashing default settings now!'
         });
 
-        savingOrApplyingSelectedEscs.value = escStore.escData.map((_, i) => i + 1);
+        savingOrApplyingSelectedEscs.value = escStore.selectedEscInfo.map((_, i) => i + 1);
 
         applyDefaultConfig();
     }
@@ -741,11 +754,17 @@ const connectToEsc = async () => {
     let needToSave = false;
 
     for (const esc of escStore.escData) {
+        if (esc.isError || !esc.data) {
+            continue;
+        }
         const firmwareVersion = `${esc.data.settings.MAIN_REVISION}.${esc.data.settings.SUB_REVISION}`;
         if (firmwareVersion.endsWith('2.19')) {
             if (esc.data.settings.TIMING_ADVANCE as number < 10) {
                 needToSave = true;
                 for (let i = 0; i < escStore.escData.length; ++i) {
+                    if (escStore.escData[i].isError || !escStore.escData[i].data) {
+                        continue;
+                    }
                     escStore.escData[i].data.settingsDirty = true;
                     escStore.escData[i].data.settings.TIMING_ADVANCE = 16;
                 }
@@ -784,7 +803,8 @@ const writeConfig = async () => {
         escStore.settingsDirty = false;
     } else if (serialStore.isDirectConnect && escStore.firstValidEscData) {
         const mcu = new Mcu(escStore.firstValidEscData.data.meta.signature);
-        await Direct.getInstance().writeChunked(mcu.getEepromOffset(), objectToSettingsArray(escStore.firstValidEscData.data.settings, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number));
+        mcu.setInfo(escStore.firstValidEscData.data);
+        await Direct.getInstance().writeChunked(mcu.getEepromStartByte(), objectToSettingsArray(escStore.firstValidEscData.data.settings, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number), mcu.getDirectWriteChunk());
         escStore.firstValidEscData.data.settingsDirty = false;
         escStore.firstValidEscData.data.settingsBuffer = objectToSettingsArray(escStore.firstValidEscData.data.settings, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number);
     }
@@ -839,71 +859,65 @@ const selectFile = (event: Event | FileList) => {
 };
 
 const startModalFlash = async () => {
-    const logStore = useLogStore();
-    try {
     if (currentTab.value === 0) {
         const url = releases.value?.[0].children.find(c => c.name === selectedRelease.value)?.files.find(f => f.name === selectedAsset.value)?.url;
-        if (!url) {
-            logStore.logError('Could not resolve firmware URL. Check that a release and asset are selected.');
-            toast.add({ title: 'Error', color: 'red', description: 'Could not resolve firmware URL.' });
-            return;
-        }
-        const dbEntry = await db.downloads.where('url').equals(url).first();
+        if (url) {
+            const dbEntry = await db.downloads.where('url').equals(url).first();
 
-        escStore.activeTarget = 0;
-        escStore.step = 'Downloading';
+            escStore.activeTarget = 0;
+            escStore.step = 'Downloading';
 
-        if (dbEntry) {
-            return await startFlash(dbEntry.text);
-        }
+            if (dbEntry) {
+                return startFlash(dbEntry.text);
+            }
 
-        const file: Response = await fetch(url);
-        const blob = await file.blob();
-        const data = await blob.text();
-        if (blob && typeof data === 'string') {
-            await db.downloads.add({
-                url,
-                text: data
-            });
+            const file: Response = await fetch(url);
+            const blob = await file.blob();
+            const data = await blob.text();
+            if (blob && typeof data === 'string') {
+                await db.downloads.add({
+                    url,
+                    text: data
+                });
 
-            await startFlash(data);
+                startFlash(data);
+            }
         }
     } else if (currentTab.value === 1) {
         const logStore = useLogStore();
         if (fileInput.value) {
-            if (!serialStore.isDirectConnect && !ignoreMcuLayout.value && escStore.firstValidEscData) {
+            if (!ignoreMcuLayout.value && escStore.firstValidEscData) {
                 const mcu = new Mcu(escStore.firstValidEscData.data.meta.signature);
-                const eepromOffset = mcu.getEepromOffset();
-                const offset = 0x8000000;
-                const fileNamePlaceOffset = 30;
+                // honour v3 devinfo so the filename block is located at the
+                // bootloader-reported filename address (DroneCAN builds link
+                // it away from the EEPROM), not the static-table default.
+                mcu.setInfo(escStore.firstValidEscData.data);
+                const fileNameAddress = mcu.getFlashOffset() + mcu.getFileNameStartByte();
 
                 const fileFlash = Flash.parseHex(await fileInput.value.text());
                 const tmp = escStore.firstValidEscData.data.meta.am32;
-                if (fileFlash && tmp.mcuType && tmp.fileName) {
-                    const findFileNameBlock = fileFlash.data.find(d =>
-                        (eepromOffset - fileNamePlaceOffset) > (d.address - offset) && (eepromOffset - fileNamePlaceOffset) < (d.address - offset + d.bytes)
-                    );
-                    if (!findFileNameBlock) {
+                if (fileFlash && tmp.fileName) {
+                    const hexFileName = Flash.getFileName(fileFlash, fileNameAddress);
+                    if (hexFileName === null) {
                         logStore.logError('File name not found in hex, probably too old!');
                         throw new Error('File name not found in hex file.');
                     }
 
-                    const hexFileName = new TextDecoder().decode(new Uint8Array(findFileNameBlock.data).slice(0, findFileNameBlock.data.indexOf(0x00)));
-                    if (!hexFileName.endsWith(tmp.mcuType)) {
+                    if (tmp.mcuType && Mcu.mcuTypeFromFileName(hexFileName) !== tmp.mcuType) {
                         logStore.logError('Invalid MCU type in hex file.');
                         throw new Error('Invalid MCU type in hex file.');
                     }
 
-                    const currentFileName = hexFileName.slice(0, hexFileName.lastIndexOf('_'));
-                    const expectedFileName = tmp.fileName.slice(0, tmp.fileName.lastIndexOf('_'));
-                    if (currentFileName !== expectedFileName) {
+                    // the name covers the board and whether it is a DroneCAN
+                    // build, so the hex is for this ESC only if it matches
+                    if (hexFileName !== tmp.fileName) {
                         logStore.logError('Layout does not match! Aborting flash!');
-                        logStore.logError(`Expected: ${expectedFileName}, given: ${currentFileName}`);
+                        logStore.logError(`Expected: ${tmp.fileName}, given: ${hexFileName}`);
                         throw new Error('Layout does not match! Aborting flash!');
                     }
                 }
             }
-            await startFlash(await fileInput.value.text());
+            startFlash(await fileInput.value.text());
         }
     } else if (currentTab.value === 2) {
         const logStore = useLogStore();
@@ -918,104 +932,148 @@ const startModalFlash = async () => {
 
             const fileFlash = Flash.parseHex(amj.hex);
             const tmp = escStore.firstValidEscData.data;
-            if (fileFlash && tmp.meta?.am32?.mcuType && tmp.meta?.am32?.fileName) {
-                if (amj.mcuType !== tmp.meta.am32.mcuType) {
-                    logStore.logError('Invalid MCU type in amj file.');
-                    throw new Error('Invalid MCU type in amj file.');
+            const escFileName = tmp.meta?.am32?.fileName;
+            if (fileFlash) {
+                // An updater is entered at the address the installed
+                // bootloader starts the application from: a from4k updater
+                // begins at 0x1000, one for a 16k CAN bootloader at 0x4000.
+                // The wrong pairing writes an image the bootloader can never
+                // enter, over a working application.
+                const mcu = new Mcu(tmp.meta.signature);
+                mcu.setInfo(tmp);
+                const origin = fileFlash.data[0].address - mcu.getFlashOffset();
+                const appStart = mcu.getFirmwareStartByte();
+                if (origin !== appStart) {
+                    logStore.logError(`Updater starts at 0x${origin.toString(16)}, this bootloader starts the application at 0x${appStart.toString(16)}! Aborting flash!`);
+                    throw new Error('Updater does not match the installed bootloader.');
                 }
 
-                if (amj.pin !== tmp.bootloader.pin) {
-                    logStore.logError('Pin does not match! Aborting flash!');
-                    throw new Error('Pin does not match! Aborting flash!');
+                if (escFileName) {
+                    // an amj carries a bootloader, so one for the wrong MCU
+                    // takes a debugger to undo. A handful of boards name no
+                    // MCU family, leaving nothing to check the file against;
+                    // refuse those rather than let the pin stand in for the MCU
+                    if (!tmp.meta.am32.mcuType) {
+                        logStore.logError(`Cannot tell the MCU type from the ESC name ${escFileName}! Aborting flash!`);
+                        throw new Error('Cannot tell the MCU type of the ESC.');
+                    }
+
+                    if (amj.mcuType !== tmp.meta.am32.mcuType) {
+                        logStore.logError('Invalid MCU type in amj file.');
+                        throw new Error('Invalid MCU type in amj file.');
+                    }
+
+                    // bootloader.pin is '' when the reported pin code made no
+                    // sense, which no amj matches
+                    if (amj.pin !== tmp.bootloader.pin) {
+                        logStore.logError('Pin does not match! Aborting flash!');
+                        throw new Error('Pin does not match! Aborting flash!');
+                    }
                 }
             }
-            await startFlash(amj.hex);
+            startFlash(amj.hex);
         }
-    }
-    } catch (e: any) {
-        logStore.logError('Flash error: ' + (e?.message ?? String(e)));
-        toast.add({ title: 'Flash Error', color: 'red', description: e?.message ?? String(e) });
-        escStore.activeTarget = -1;
-        escStore.step = '';
     }
 };
 
 const startFlash = async (hexString: string) => {
-    if (serialStore.isDirectConnect) {
+    if (serialStore.isDirectConnect && escStore.firstValidEscData) {
         const logStore = useLogStore();
-        if (!escStore.firstValidEscData) {
-            logStore.logError('ESC not connected! Please connect to ESC first.');
-            toast.add({ title: 'Error', color: 'red', description: 'ESC not connected. Press the scan button first.' });
-            return;
-        }
         const parsed = Flash.parseHex(hexString);
         const mcu = new Mcu(escStore.firstValidEscData.data.meta.signature);
-        if (!parsed) {
-            logStore.logError('Failed to parse hex file!');
-            toast.add({ title: 'Error', color: 'red', description: 'Failed to parse hex file!' });
-            return;
-        }
-        try {
+        // v3 devinfo (address_shift, firmware/eeprom starts) from the
+        // connect-time read, so 128k parts address correctly
+        mcu.setInfo(escStore.firstValidEscData.data);
         if (parsed) {
             escStore.activeTarget = 0;
             escStore.bytesWritten = 0;
 
-            escStore.totalBytes = parsed.bytes;
+            // One merged 0xFF-filled image, written in aligned chunks from
+            // the firmware start - the same shape the four-way writeHex
+            // path uses. Writing per hex block double-programmed any
+            // aligned window shared by two blocks (losing the first
+            // block's bytes to the second write's padding) and could not
+            // address blocks whose start the v3 address_shift cannot
+            // express.
+            const endAddress = parsed.data[parsed.data.length - 1].address + parsed.data[parsed.data.length - 1].bytes;
+            const image = Flash.fillImage(parsed, endAddress - mcu.getFlashOffset(), mcu.getFlashOffset());
+            if (!image) {
+                toast.add({
+                    title: 'Error',
+                    color: 'red',
+                    description: 'hex file addresses fall outside the flash!'
+                });
+                return;
+            }
+            const begin = mcu.getFirmwareStartByte();
+            escStore.totalBytes = image.byteLength - begin;
             escStore.step = 'Writing';
 
-            let i = 0;
-
-            // Hex files may use absolute addresses (e.g. 0x08001000) or relative addresses (e.g. 0x1000).
-            // cmd_SetAddress only encodes 16-bit offsets, so subtract flashOffset only if addresses are absolute.
-            const maxHexAddress = parsed.data.reduce((m, d) => Math.max(m, d.address), 0);
-            const hexFlashOffset = maxHexAddress >= mcu.getFlashOffset() ? mcu.getFlashOffset() : 0;
-
-            for (const start of parsed.data) {
-                if (start.bytes === 0) {
-                    continue;
-                }
-                i = 0;
-                logStore.log(`Flashing: 0x${start.address.toString(16)}, ${start.bytes} bytes`);
-                const CHUNK_SIZE = 64;
-                while (i * CHUNK_SIZE < start.data.length) {
-                    const sliceEnd = Math.min((i + 1) * CHUNK_SIZE, start.data.length);
-                    const chunk = new Uint8Array(start.data.slice(i * CHUNK_SIZE, sliceEnd));
-                    logStore.log(`... 0x${((start.address - hexFlashOffset) + (i * CHUNK_SIZE)).toString(16)} - 0x${((start.address - hexFlashOffset) + sliceEnd - 1).toString(16)}`);
-                    await Direct.getInstance().writeBufferToAddress((start.address - hexFlashOffset) + (i * CHUNK_SIZE), chunk);
-                    escStore.bytesWritten += chunk.length;
-                    i += 1;
-                }
+            // boot bit: clear before flashing, set again via the config
+            // rewrite (or reset seeding) after success, as writeHex does -
+            // a power loss mid-flash must not leave a half image bootable.
+            // LAYOUT_REVISION 0 is a zeroed eeprom, not a configuration.
+            const preFlashSettings = escStore.firstValidEscData.data.settings;
+            const havePreConfig = (preFlashSettings.BOOT_BYTE as number) <= 1 &&
+                (preFlashSettings.LAYOUT_REVISION as number) >= 1 &&
+                (preFlashSettings.LAYOUT_REVISION as number) <= 64;
+            if (havePreConfig) {
+                // the whole buffer, not just the leading bytes: the eeprom
+                // write erases its page, so a short guard would trade the
+                // rest of the stored settings for the boot byte
+                const guard = Uint8Array.from(escStore.firstValidEscData.data.settingsBuffer);
+                guard[0] = 0x00;
+                await Direct.getInstance().writeChunked(mcu.getEepromStartByte(), guard, mcu.getDirectWriteChunk());
             }
-            escStore.step = 'Rewriting config';
-            await writeConfig();
+
+            const CHUNK_SIZE = mcu.getDirectWriteChunk();
+            for (let off = begin; off < image.byteLength; off += CHUNK_SIZE) {
+                const end = Math.min(off + CHUNK_SIZE, image.byteLength);
+                let chunk: Uint8Array = image.subarray(off, end);
+                if (chunk.length % 8 !== 0) {
+                    // the bootloader's flash write requires an 8-byte
+                    // aligned length; pad the image tail with erased flash
+                    const padded = new Uint8Array((chunk.length + 7) & ~7).fill(0xFF);
+                    padded.set(chunk);
+                    chunk = padded;
+                }
+                await Direct.getInstance().writeBufferToAddress(off, chunk);
+                escStore.bytesWritten += end - off;
+            }
+            // A factory-fresh ESC has an erased settings area: there is
+            // no valid layout to serialise (LAYOUT_REVISION reads 0xFF,
+            // and the version-gated fields are absent from the parsed
+            // settings) and nothing worth preserving, so leave it erased
+            // and let 'Send default config' seed it. Rewriting is for
+            // keeping a real pre-flash configuration across the update.
+            if (havePreConfig) {
+                escStore.step = 'Rewriting config';
+                // the flash completed: the ESC must boot it, whatever the
+                // boot byte said before - a reconnect after an interrupted
+                // flash reads back the 0 the guard wrote
+                escStore.firstValidEscData.data.settings.BOOT_BYTE = 1;
+                await writeConfig();
+            } else {
+                logStore.log('eeprom is erased; use "Send default config" to initialise it');
+            }
             escStore.step = 'Resetting';
             await Direct.getInstance().writeCommand(DIRECT_COMMANDS.cmd_Reset, 0);
-            await delay(2000);
+            await delay(3000);
             escStore.step = 'Read config';
-            const newInfo = await Direct.getInstance().init();
-            if (newInfo && escStore.escData[0]) {
-                escStore.escData[0].data = newInfo;
-                escStore.escData[0].isLoading = false;
-                escStore.escData[0].isError = false;
-            }
-            escStore.step = '';
+            await Direct.getInstance().init();
+
             escStore.activeTarget = -1;
-            flashModalOpen.value = false;
-            toast.add({ title: 'Flash complete', color: 'green', description: 'Firmware flashed successfully!' });
         }
-        } catch (e: any) {
-            const logStore = useLogStore();
-            logStore.logError('Flash failed: ' + (e?.message ?? String(e)));
-            toast.add({ title: 'Flash Error', color: 'red', description: e?.message ?? String(e) });
-            escStore.activeTarget = -1;
-            escStore.step = '';
-        }
-        return;
     } else {
         for (const n of savingOrApplyingSelectedEscs.value) {
-            const i = n - 1;
+            // n is a position in the filtered selectedEscInfo list the modal
+            // shows; map it to the escData slot / four-way target behind it
+            const i = escStore.selectedEscIndices[n - 1];
+            if (i === undefined) {
+                continue;
+            }
             escStore.activeTarget = i;
-            await FourWay.getInstance().writeHex(i, hexString, 200);
+            await FourWay.getInstance().writeHex(i, escStore.escData[i].data, hexString, 200);
             await delay(200);
             if (currentTab.value === 2) {
                 escStore.step = 'Sending default config';
@@ -1044,51 +1102,107 @@ const startFlash = async (hexString: string) => {
         escStore.activeTarget = -1;
         flashModalOpen.value = false;
 
-        await connectToEsc(); // reconnect after 4-way flash
+        await connectToEsc();
         /* if (file_input.value) {
             file_input.value.value = '';
         } */
     }
 };
 
+// newest eeprom layout we know defaults for
+const HIGHEST_LAYOUT_REVISION = 4;
+
 const applyDefaultConfig = async () => {
-    let eepromVersion = escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number;
-    if (eepromVersion > 3) {
-        eepromVersion = 2;
-    }
-    const eepromUrl = await fetch(`/api/eeprom/${escStore.firstValidEscData?.data.meta.am32.fileName}?version=${eepromVersion}`)
-        .then((res) => {
-            if (res.status === 200) {
-                return res.text();
+    const rawEscVersion = escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number;
+    const escName = escStore.firstValidEscData?.data.meta.am32.fileName;
+    // an erased eeprom reads 0xFF (or 0x00 when zeroed) - not a real layout.
+    // Start the descent from the newest known layout instead of walking
+    // hundreds of bogus versions (or, for 0, never running at all).
+    const layoutIsValid = rawEscVersion >= 1 && rawEscVersion <= HIGHEST_LAYOUT_REVISION;
+    const escVersion = layoutIsValid ? rawEscVersion : HIGHEST_LAYOUT_REVISION;
+
+    // Find a default image the ESC can actually take: its own layout
+    // first, then older layouts (whose fields are a subset), the named
+    // target before the generic default at each step. Every response is
+    // validated before use - an API error page written to the eeprom
+    // bricks the settings, which is exactly what used to happen here.
+    const fetchDefault = async (): Promise<{ buffer: Uint8Array, version: number } | null> => {
+        for (let version = escVersion; version >= 1; version--) {
+            for (const name of [escName, 'DEFAULT']) {
+                if (!name) {
+                    continue;
+                }
+                const url = await fetch(`/api/eeprom/${name}?version=${version}`)
+                    .then(res => (res.status === 200 ? res.text() : null))
+                    .catch(() => null);
+                if (!url) {
+                    continue;
+                }
+                const blob = await fetch(url)
+                    .then(res => (res.status === 200 ? res.arrayBuffer() : null))
+                    .catch(() => null);
+                if (!blob) {
+                    continue;
+                }
+                const buffer = new Uint8Array(blob);
+                // a settings image, not an error page: the layout byte
+                // must be the one we asked for and the boot byte sane
+                if (buffer.length >= 48 && buffer[1] === version && buffer[0] <= 1) {
+                    return { buffer, version };
+                }
             }
-            return fetch(`/api/eeprom/DEFAULT?version=${eepromVersion}`).then(res => res.text());
-        })
-        .catch(() => null);
-
-    if (!eepromUrl) {
-        throw new Error('Eeprom not found');
-    }
-
-    const file = await fetch(eepromUrl).then(res => res.arrayBuffer());
-
-    if (file) {
-        const buffer = new Uint8Array(file);
-        const settings = bufferToSettings(buffer, eepromVersion);
-
-        settings.STARTUP_MELODY = (new Array(128)).fill(0xFF);
-
-        for (const n of savingOrApplyingSelectedEscs.value) {
-            escStore.escData[n - 1].data.settings = settings;
-            escStore.escData[n - 1].data.settingsDirty = true;
         }
+        return null;
+    };
 
-        await writeConfig().catch((err) => {
-            logError(err.message);
-        });
-
+    const found = await fetchDefault();
+    if (!found) {
+        logError(`No valid default config available for ${escName} (eeprom v${escVersion})`);
         if (applyDefaultConfigModalOpen.value) {
             applyDefaultConfigModalOpen.value = false;
         }
+        return;
+    }
+
+    const defaults = bufferToSettings(found.buffer, found.version);
+    defaults.STARTUP_MELODY = (new Array(128)).fill(0xFF);
+    // a default config must not change what the ESC is, only how it is
+    // tuned: identity fields always come from the ESC itself. An erased
+    // eeprom has no identity to keep, though - preserving its 0xFF boot
+    // byte would leave the ESC unbootable - so remember the default's
+    // boot/layout bytes for that case.
+    const defaultBootByte = defaults.BOOT_BYTE;
+    const defaultLayout = defaults.LAYOUT_REVISION;
+    delete defaults.BOOT_BYTE;
+    delete defaults.LAYOUT_REVISION;
+    delete defaults.BOOT_LOADER_REVISION;
+    delete defaults.MAIN_REVISION;
+    delete defaults.SUB_REVISION;
+
+    for (const n of savingOrApplyingSelectedEscs.value) {
+        const i = escStore.selectedEscIndices[n - 1];
+        if (i === undefined) {
+            continue;
+        }
+        const current = escStore.escData[i].data.settings;
+        // fields the (possibly older-layout) default lacks keep their
+        // current values rather than becoming undefined
+        const merged = { ...current, ...defaults };
+        const currentLayout = current.LAYOUT_REVISION as number;
+        if (!(currentLayout >= 1 && currentLayout <= HIGHEST_LAYOUT_REVISION)) {
+            merged.BOOT_BYTE = defaultBootByte;
+            merged.LAYOUT_REVISION = defaultLayout;
+        }
+        escStore.escData[i].data.settings = merged;
+        escStore.escData[i].data.settingsDirty = true;
+    }
+
+    await writeConfig().catch((err) => {
+        logError(err.message);
+    });
+
+    if (applyDefaultConfigModalOpen.value) {
+        applyDefaultConfigModalOpen.value = false;
     }
 
     if (applyConfigFile.value) {
@@ -1098,12 +1212,16 @@ const applyDefaultConfig = async () => {
 
 const downloadEscConfig = () => {
     for (const n of savingOrApplyingSelectedEscs.value) {
-        const blob = new Blob([escStore.escData[n - 1].data.settingsBuffer.buffer as ArrayBuffer], {
+        const i = escStore.selectedEscIndices[n - 1];
+        if (i === undefined) {
+            continue;
+        }
+        const blob = new Blob([escStore.escData[i].data.settingsBuffer.buffer as ArrayBuffer], {
             type: 'application/octet-stream'
         });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `esc${n}_config.bin`;
+        link.download = `esc${i + 1}_config.bin`;
         link.click();
         URL.revokeObjectURL(link.href);
     }
@@ -1117,8 +1235,12 @@ const applyConfig = async () => {
             const settings = bufferToSettings(buffer, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number);
 
             for (const n of savingOrApplyingSelectedEscs.value) {
-                escStore.escData[n - 1].data.settings = settings;
-                escStore.escData[n - 1].data.settingsDirty = true;
+                const i = escStore.selectedEscIndices[n - 1];
+                if (i === undefined) {
+                    continue;
+                }
+                escStore.escData[i].data.settings = settings;
+                escStore.escData[i].data.settingsDirty = true;
             }
 
             await writeConfig();
