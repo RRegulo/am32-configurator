@@ -55,19 +55,8 @@ type AmjType = {
     type: 'bl_update' | 'fw_update',
     githash: string,
     version: string,
-    // AM32 MCU family, eg F051 or L431
-    mcuType: string,
-    // the pin the bootloader listens on, eg PA2
+    mcuType: 'F421' | 'F051' | 'F415' | 'E230' | 'G071' | 'F031',
     pin: 'PA2' | 'PB4' | string,
-    // build target tag for a per-board build, eg TBS16SL4
-    target?: string,
-    flashSize?: string,
-    /*
-      a transition updater installs a 16k DroneCAN bootloader from a legacy
-      4k bootloader, so it is flashed over the application rather than
-      needing the CAN bootloader to already be there
-     */
-    transition?: boolean,
     hex: string
 };
 

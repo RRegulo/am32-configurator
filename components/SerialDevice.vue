@@ -6,20 +6,14 @@
         <USelectMenu
           v-model="baudrate"
           class="flex-grow"
-          :disabled="serialStore.selectedDevice.id === '-1' || serialStore.hasConnection || isDirectConnectDevice || isForceDirectConnect"
+          :disabled="serialStore.selectedDevice.id === '-1' || serialStore.hasConnection || isDirectConnectDevice"
           :options="baudrateOptions"
         />
       </div>
       <div class="flex justify-between gap-2">
-        <div class="flex gap-6 items-center">
-          <UButton size="2xs" @click="requestSerialDevices">
-            Port select
-          </UButton>
-          <label class="flex items-center gap-2">
-            Direct
-            <UCheckbox v-model="isForceDirectConnect" :disabled="isDirectConnectDevice || serialStore.hasConnection" />
-          </label>
-        </div>
+        <UButton size="2xs" @click="requestSerialDevices">
+          Port select
+        </UButton>
         <UButton v-if="!serialStore.hasConnection" :disabled="serialStore.selectedDevice.id === '-1'" size="2xs" @click="connectToDevice">
           Connect
         </UButton>
@@ -31,10 +25,10 @@
         <div class="flex gap-2 items-center">
           <UIcon name="i-fluent-serial-port-16-filled" dynamic :class="[serialStore.hasConnection ? 'text-green-500' : 'text-red-500']" />
         </div>
-        <div v-if="serialStore.hasConnection && (serialStore.mspData.motorCount > 0 || serialStore.isDirectConnect)" class="w-full flex justify-between gap-4">
+        <div v-if="serialStore.hasConnection && (escSlotCount > 0 || serialStore.isDirectConnect)" class="w-full flex justify-between gap-4">
           <div class="flex gap-2">
             <UChip
-              v-for="n of serialStore.mspData.motorCount"
+              v-for="n of escSlotCount"
               :key="n"
               :text="n"
               size="2xl"
@@ -90,6 +84,13 @@
             color="green"
             @click="applyDefaultConfigModalOpen = true"
           />
+          <UButton
+            label="Erase firmware"
+            size="2xs"
+            icon="i-material-symbols-delete-forever-outline"
+            color="red"
+            @click="eraseFirmwareModalOpen = true"
+          />
         </div>
         <div class="min-w-[112px]">
           <UButton
@@ -123,41 +124,7 @@
             </div>
           </template>
 
-          <div v-if="true" class="flex flex-col gap-4">
-            <UCheckbox
-              v-model="ignoreMcuLayout"
-              :disabled="isFlashingActive"
-              :ui="{
-                label: 'text-sm font-medium text-red-700 dark:text-red-500',
-              }"
-              label="Ignore current mcu layout"
-              color="red"
-            />
-            <UAlert
-              v-if="ignoreMcuLayout"
-              icon="i-heroicons-exclamation-triangle"
-              title="Alert!"
-              variant="subtle"
-              color="red"
-              description="If you flash a wrong mcu type, you will brick the mcu, recovering from this will take some effort!"
-            />
-            <UCheckbox
-              v-model="includePrerelease"
-              :disabled="isFlashingActive"
-              :ui="{
-                label: 'text-sm font-medium text-orange-700 dark:text-orange-500',
-              }"
-              label="Include prerelease versions"
-              color="orange"
-            />
-            <UAlert
-              v-if="includePrerelease"
-              icon="i-heroicons-exclamation-triangle"
-              title="Be aware!"
-              variant="subtle"
-              color="orange"
-              description="Prerelease or release candidate versions might have bugs, if you encounter issues, please join our discord and report them!"
-            />
+          <div class="flex flex-col gap-4">
             <UTabs
               v-model="currentTab"
               :items="flashTabs"
@@ -170,16 +137,37 @@
                     searchable-placeholder="Search a release..."
                     :disabled="isFlashingActive"
                     :options="releasesOptions"
-                    :loading="status === 'pending'"
-                  />
-                  <USelectMenu
-                    v-model="selectedAsset"
-                    searchable
-                    searchable-placeholder="Search a hex file..."
-                    :options="assets"
-                    :disabled="assets?.length === 0 || !ignoreMcuLayout || isFlashingActive"
-                    :loading="status === 'pending'"
-                  />
+                    :loading="isFetchingReleases"
+                  >
+                    <template #option="{ option }">
+                      <div class="flex w-full items-center justify-between gap-2">
+                        <span>{{ option }}</span>
+                        <UBadge
+                          v-if="releaseNotes[option]"
+                          size="xs"
+                          variant="subtle"
+                          color="primary"
+                        >
+                          {{ releaseNotes[option] }}
+                        </UBadge>
+                      </div>
+                    </template>
+                  </USelectMenu>
+                  <div v-if="selectedAsset" class="text-sm text-gray-400">
+                    Firmware: <span class="text-green-400">{{ selectedAsset }}</span>
+                    <UBadge
+                      v-if="releaseNotes[selectedRelease]"
+                      class="ml-2"
+                      size="xs"
+                      variant="subtle"
+                      color="primary"
+                    >
+                      {{ releaseNotes[selectedRelease] }}
+                    </UBadge>
+                  </div>
+                  <div v-else-if="!isFetchingReleases" class="text-sm text-red-400">
+                    No firmware found for this device
+                  </div>
                 </div>
               </template>
               <template #local>
@@ -222,24 +210,21 @@
               </template>
             </UTabs>
           </div>
-          <div v-else class="text-green-500 text-center">
-            Flashing local '{{ fileInput ?? 'UNKNOWN' }}'
-          </div>
           <div v-if="serialStore.isFourWay" class="pt-4">
             <div class="text-center mb-2">
               Select ESC(s) to flash:
             </div>
             <div class="w-full text-center flex justify-center gap-2">
               <div
-                v-for="n of escStore.selectedEscInfo.length"
-                :key="n"
+                v-for="entry of validEscEntries"
+                :key="entry.index"
                 class="transition-all w-8 h-8 rounded-full text-center border border-gray-500 bg-gray-800 p-1 cursor-pointer"
                 :class="{
-                  'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(n)
+                  'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(entry.index + 1)
                 }"
-                @click="toggleSavingOrApplyingSelectedEsc(n);"
+                @click="toggleSavingOrApplyingSelectedEsc(entry.index + 1);"
               >
-                {{ n }}
+                {{ entry.index + 1 }}
               </div>
             </div>
           </div>
@@ -249,8 +234,8 @@
                 <UButton
                   label="Start flash"
                   :disabled="
-                    (savingOrApplyingSelectedEscs.length === 0) ||
-                      (currentTab === 0 && (!selectedAsset || selectedAsset === 'NOT FOUND')) ||
+                    (!serialStore.isDirectConnect && savingOrApplyingSelectedEscs.length === 0) ||
+                      (currentTab === 0 && !selectedAsset) ||
                       (currentTab > 0 && !fileInput)
                   "
                   @click="startModalFlash"
@@ -293,15 +278,15 @@
               </div>
               <div class="w-full text-center flex justify-center gap-2">
                 <div
-                  v-for="n of escStore.selectedEscInfo.length"
-                  :key="n"
+                  v-for="entry of validEscEntries"
+                  :key="entry.index"
                   class="transition-all w-8 h-8 rounded-full text-center border border-gray-500 bg-gray-800 p-1 cursor-pointer"
                   :class="{
-                    'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(n)
+                    'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(entry.index + 1)
                   }"
-                  @click="toggleSavingOrApplyingSelectedEsc(n);"
+                  @click="toggleSavingOrApplyingSelectedEsc(entry.index + 1);"
                 >
-                  {{ n }}
+                  {{ entry.index + 1 }}
                 </div>
               </div>
             </div>
@@ -332,15 +317,15 @@
               </div>
               <div class="w-full text-center flex justify-center gap-2">
                 <div
-                  v-for="n of escStore.selectedEscInfo.length"
-                  :key="n"
+                  v-for="entry of validEscEntries"
+                  :key="entry.index"
                   class="transition-all w-8 h-8 rounded-full text-center border border-gray-500 bg-gray-800 p-1 cursor-pointer"
                   :class="{
-                    'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(n)
+                    'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(entry.index + 1)
                   }"
-                  @click="toggleSavingOrApplyingSelectedEsc(n);"
+                  @click="toggleSavingOrApplyingSelectedEsc(entry.index + 1);"
                 >
-                  {{ n }}
+                  {{ entry.index + 1 }}
                 </div>
               </div>
             </div>
@@ -372,15 +357,15 @@
               </div>
               <div class="w-full text-center flex justify-center gap-2">
                 <div
-                  v-for="n of escStore.selectedEscInfo.length"
-                  :key="n"
+                  v-for="entry of validEscEntries"
+                  :key="entry.index"
                   class="transition-all w-8 h-8 rounded-full text-center border border-gray-500 bg-gray-800 p-1 cursor-pointer"
                   :class="{
-                    'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(n)
+                    'ring-2 ring-green-500 bg-green-300/30': savingOrApplyingSelectedEscs.includes(entry.index + 1)
                   }"
-                  @click="toggleSavingOrApplyingSelectedEsc(n);"
+                  @click="toggleSavingOrApplyingSelectedEsc(entry.index + 1);"
                 >
-                  {{ n }}
+                  {{ entry.index + 1 }}
                 </div>
               </div>
             </div>
@@ -388,6 +373,58 @@
           <template #footer>
             <div class="text-right">
               <UButton label="Apply" :disabled="savingOrApplyingSelectedEscs.length === 0 || applyConfigFile?.input.files.length === 0" @click="applyConfig" />
+            </div>
+          </template>
+        </UCard>
+      </UModal>
+      <UModal v-model="eraseFirmwareModalOpen">
+        <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
+          <template #header>
+            <div class="flex items-center justify-center gap-2 text-xl">
+              <UIcon name="i-material-symbols-delete-forever-outline" class="h-8 w-8 text-red-500" />
+              <div class="text-2xl">
+                Erase firmware
+              </div>
+            </div>
+          </template>
+          <div class="flex flex-col gap-3">
+            <UAlert
+              color="red"
+              variant="soft"
+              title="Attention!"
+              description="The firmware area is overwritten with zeroes and the boot flag is cleared. The ESC will stay in the bootloader until you flash firmware again. Settings are kept."
+            />
+            <template v-if="!serialStore.isDirectConnect">
+              <div class="text-center">
+                Select ESC(s) to erase:
+              </div>
+              <div class="w-full text-center flex justify-center gap-2">
+                <div
+                  v-for="entry of validEscEntries"
+                  :key="entry.index"
+                  class="transition-all w-8 h-8 rounded-full text-center border border-gray-500 bg-gray-800 p-1 cursor-pointer"
+                  :class="{
+                    'ring-2 ring-red-500 bg-red-300/30': savingOrApplyingSelectedEscs.includes(entry.index + 1)
+                  }"
+                  @click="toggleSavingOrApplyingSelectedEsc(entry.index + 1);"
+                >
+                  {{ entry.index + 1 }}
+                </div>
+              </div>
+            </template>
+            <div v-else class="text-center">
+              The connected ESC will be erased.
+            </div>
+          </div>
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton color="gray" variant="soft" label="Cancel" @click="eraseFirmwareModalOpen = false" />
+              <UButton
+                color="red"
+                label="Erase"
+                :disabled="!serialStore.isDirectConnect && savingOrApplyingSelectedEscs.length === 0"
+                @click="eraseFirmware"
+              />
             </div>
           </template>
         </UCard>
@@ -402,49 +439,137 @@ import commandsQueue from '~/src/communication/commands.queue';
 import { DIRECT_COMMANDS, Direct } from '~/src/communication/direct';
 import { FOUR_WAY_COMMANDS, FourWay } from '~/src/communication/four_way';
 import Msp, { MSP_COMMANDS } from '~/src/communication/msp';
+import serial from '~/src/communication/serial';
 import Serial from '~/src/communication/serial';
 import db from '~/src/db';
 import Flash from '~/src/flash';
-import Mcu, { type EscData } from '~/src/mcu';
+import Mcu, { type EscData, type McuInfo } from '~/src/mcu';
+
+// Signature → hex filename candidates for RRegulo/esc-firmware releases.
+// The K1921VK035 asset was renamed niiet -> vk035; keep both so old releases
+// (which still ship esc-firmware-niiet.hex) and new ones (esc-firmware-vk035.hex)
+// both resolve.
+const ESC_FIRMWARE_HEX: Record<number, string[]> = {
+    0x1f06: ['esc-firmware-wch.hex'],
+    0x3506: ['esc-firmware-vk035.hex', 'esc-firmware-niiet.hex'],
+    0x0506: ['esc-firmware-vg5t.hex']
+};
 
 const toast = useToast();
 const serialStore = useSerialStore();
 const escStore = useEscStore();
 const { escData } = storeToRefs(escStore);
 const { log, logWarning, logError } = useLogStore();
-const usbFCVendorIds = [0x0483, 0x2E3C, 0x2E8A, 0x1209, 0x26AC, 0x27AC, 0x2DAE, 0x3162, 0x35A7, 0x28E9];
+const usbFCVendorIds = [0x0483, 0x2E3C, 0x2E8A, 0x1209, 0x26AC, 0x27AC, 0x2DAE, 0x3162, 0x35A7];
 const usbDirectVendorIds = [0x1A86, 0x0403, 0x4348, 0x26BA, 0x10C4];
 const usbDirectDeviceIdExceptions = [0xE204];
 const flashModalOpen = ref(false);
 const applyDefaultConfigModalOpen = ref(false);
 const saveConfigModalOpen = ref(false);
 const applyConfigModalOpen = ref(false);
+const eraseFirmwareModalOpen = ref(false);
 const fileInput = ref<File | null>(null);
 const currentTab = ref(0);
 const applyConfigFile = ref();
 
 const selectedRelease = ref('');
 const selectedAsset = ref('');
-const ignoreMcuLayout = ref(false);
-const includePrerelease = ref(false);
 const savingOrApplyingSelectedEscs = ref<number[]>([]);
 const isFlashingActive = computed(() => escStore.activeTarget > -1);
 
-const progressIsIntermediate = computed(() => !['Writing', 'Verifying'].includes(escStore.step));
+// Valid (responding) ESCs with their real motor slot index
+const validEscEntries = computed(() =>
+    escStore.escData
+        .map((esc, index) => ({ esc, index }))
+        .filter(entry => !entry.esc.isError && entry.esc.data)
+);
 
-const { data, status } = useAsyncData('get-releases', () => useFetch(`/api/files?filter=releases${includePrerelease.value ? '&prereleases' : ''}`), {
-    watch: [includePrerelease]
-});
+const escSlotCount = computed(() => escStore.escData.length || serialStore.mspData.motorCount);
+
+const progressIsIntermediate = computed(() => !['Writing', 'Verifing'].includes(escStore.step));
+
+const { data, status } = useAsyncData('get-releases', () => useFetch(`/api/files?filter=releases`));
+
+const { stableReleases: firmwareIndexReleases, status: firmwareIndexStatus } = useFirmwareIndex();
 
 const releases = computed(() => {
-    const tmp = data.value?.data as unknown as { data: BlobFolder[] };
-    return tmp?.data ?? [];
+    const minoReleases = (data.value?.data as unknown as { data: BlobFolder[] })?.data ?? [];
+    const indexChildren: BlobFolder[] = firmwareIndexReleases.value.map(r => ({
+        name: r.name,
+        files: r.files,
+        children: []
+    }));
+
+    const allChildren: BlobFolder[] = [
+        ...(minoReleases[0]?.children ?? []),
+        ...indexChildren
+    ];
+
+    const seen = new Set<string>();
+    const merged: BlobFolder[] = [];
+    for (const child of allChildren) {
+        if (!seen.has(child.name)) {
+            seen.add(child.name);
+            merged.push(child);
+        }
+    }
+
+    if (merged.length === 0 && minoReleases.length === 0 && firmwareIndexReleases.value.length === 0) {
+        return [];
+    }
+
+    return [{
+        name: 'releases',
+        files: [],
+        children: merged
+    }] as BlobFolder[];
 });
+
+const isFetchingReleases = computed(() => status.value === 'pending' || firmwareIndexStatus.value === 'pending');
 
 const assets = computed(() => (releases.value?.[0]?.children.find(c => c.name === selectedRelease.value)?.files.map(f => f.name)));
 
+// Newest version first; for the same version the plain release ("2.4.0")
+// comes before its variants ("2.4.0 soft"), so it is the default choice.
+const parseReleaseName = (name: string) => {
+    const m = name.match(/^v?(\d+)\.(\d+)(?:\.(\d+))?(.*)$/i);
+    return m
+        ? { v: [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)], suffix: m[4].trim() }
+        : { v: [-1, -1, -1], suffix: name };
+};
+
+const compareReleaseNames = (a: string, b: string) => {
+    const ra = parseReleaseName(a);
+    const rb = parseReleaseName(b);
+    for (let i = 0; i < 3; i++) {
+        if (ra.v[i] !== rb.v[i]) {
+            return rb.v[i] - ra.v[i];
+        }
+    }
+    if (ra.suffix === rb.suffix) {
+        return 0;
+    }
+    if (!ra.suffix) {
+        return -1;
+    }
+    if (!rb.suffix) {
+        return 1;
+    }
+    return ra.suffix.localeCompare(rb.suffix);
+};
+
 const releasesOptions = computed(() => {
-    return (releases.value?.[0]?.children.map(c => c.name) ?? []).sort((a, b) => b.localeCompare(a));
+    return (releases.value?.[0]?.children.map(c => c.name) ?? []).sort(compareReleaseNames);
+});
+
+const releaseNotes = computed<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const release of firmwareIndexReleases.value) {
+        if (release.note) {
+            map[release.name] = release.note;
+        }
+    }
+    return map;
 });
 
 const flashTabs = computed(() => [
@@ -461,13 +586,6 @@ watch(releasesOptions, (d) => {
     }
 });
 
-watch(includePrerelease, (b, a) => {
-    if (b !== a) {
-        selectedAsset.value = '';
-        selectedRelease.value = '';
-    }
-});
-
 const toggleSavingOrApplyingSelectedEsc = (n: number) => {
     if (savingOrApplyingSelectedEscs.value.includes(n)) {
         savingOrApplyingSelectedEscs.value = [
@@ -478,13 +596,26 @@ const toggleSavingOrApplyingSelectedEsc = (n: number) => {
     }
 };
 
+// Preselect the ESCs currently marked as selected whenever a modal opens
+watch([flashModalOpen, applyDefaultConfigModalOpen, saveConfigModalOpen, applyConfigModalOpen, eraseFirmwareModalOpen], (opened) => {
+    if (opened.some(isOpen => isOpen)) {
+        savingOrApplyingSelectedEscs.value = validEscEntries.value
+            .filter(entry => entry.esc.data?.isSelected)
+            .map(entry => entry.index + 1);
+    }
+});
+
+// Auto-select hex by MCU signature
 watchEffect(() => {
     if (assets.value && escStore.escData.length > 0) {
-        const tag = selectedRelease.value;
-        const cleanTag = tag.substring(1).replace(/-rc[1-9]*[0-9]*/gi, '');
-        console.log(`AM32_${escStore.firstValidEscData?.data.meta.am32.fileName ?? 'ERROR'}_${cleanTag}.hex`);
-        const currentAsset = assets.value?.find(a => a === `AM32_${escStore.firstValidEscData?.data.meta.am32.fileName ?? 'ERROR'}_${cleanTag}.hex`);
-        selectedAsset.value = currentAsset ?? 'NOT FOUND';
+        const signature = escStore.firstValidEscData?.data.meta.signature;
+        const candidates = signature !== undefined ? ESC_FIRMWARE_HEX[signature] : undefined;
+
+        if (candidates) {
+            selectedAsset.value = candidates.find(name => assets.value!.includes(name)) ?? '';
+        } else {
+            selectedAsset.value = '';
+        }
     }
 });
 
@@ -514,7 +645,6 @@ const requestSerialDevices = async () => {
     await fetchPairedDevices();
 };
 
-const isForceDirectConnect = ref(false);
 const isDirectConnectDevice = computed(
     () => usbDirectVendorIds.includes(Number.parseInt(serialStore.selectedDevice.id.split(':')[0])) &&
           !usbDirectDeviceIdExceptions.includes(Number.parseInt(serialStore.selectedDevice.id.split(':')[1]))
@@ -527,12 +657,10 @@ const fetchPairedDevices = async () => {
     if (pairedDevices.length > 0) {
         if (serialStore.selectedDevice.id === '-1') {
             serialStore.selectLastDevice();
-        }
-
-        if (serialStore.selectedDevice) {
-            if (isDirectConnectDevice.value || isForceDirectConnect.value) {
-                isForceDirectConnect.value = true;
-                baudrate.value = '19200';
+            if (serialStore.selectedDevice) {
+                if (isDirectConnectDevice.value) {
+                    baudrate.value = '19200';
+                }
             }
         }
     } else {
@@ -601,64 +729,64 @@ const connectToDevice = async () => {
             }
 
             if (serialStore.deviceHandles.port.readable && serialStore.deviceHandles.port.writable) {
-                /* if (!serialStore.deviceHandles.reader) {
-                    serialStore.deviceHandles.reader = await serialStore.deviceHandles.port.readable.getReader();
-                }
-                if (!serialStore.deviceHandles.writer) {
-                    serialStore.deviceHandles.writer = await serialStore.deviceHandles.port.writable.getWriter();
-                } */
                 Serial.init(log, logError, logWarning, serialStore.deviceHandles.serial, serialStore.deviceHandles.port);
 
                 log('Connected to device');
 
-                if (isDirectConnectDevice.value || isForceDirectConnect.value) {
-                    serialStore.isDirectConnect = true;
+                if (isDirectConnectDevice.value) {
                     connectToEsc();
                 } else {
-                    const result = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_API_VERSION).catch(async (err) => {
+                    const result = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_API_VERSION, undefined, 1000).catch(async (err) => {
                         logError(`${err.message}, trying to exit fourway and try again.`);
                         serialStore.isFourWay = true;
+                        FourWay.getInstance().stopKeepAlive();
                         await FourWay.getInstance().sendWithPromise(FOUR_WAY_COMMANDS.cmd_InterfaceExit);
+                        await delay(1000);
                         serialStore.isFourWay = false;
-                        const recovered = await Msp.getInstance().sendWithRetries(MSP_COMMANDS.MSP_API_VERSION);
-                        if (recovered) {
-                            return recovered;
-                        }
-                        logError('Could not leave four way mode. Restart and replug the device and try again.');
-                        return null;
+                        return Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_API_VERSION, undefined, 1000).catch(() => {
+                            logError('Not in four way mode? Cant automatically resolve issue! Restart and replug device and try again.');
+                            return null;
+                        });
                     });
 
                     if (result === null) {
                         await disconnectFromDevice();
-
                         throw new Error('Cant read or write to device!');
                     }
 
                     commandsQueue.processMspResponse(result!.commandName, result!.data);
 
-                    await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_FC_VARIANT).then((result) => {
+                    await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_FC_VARIANT, undefined, 1000).then((result) => {
                         if (result) {
                             commandsQueue.processMspResponse(result!.commandName, result!.data);
                         }
                     });
-                    await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_BATTERY_STATE).then((result) => {
+                    await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_BATTERY_STATE, undefined, 1000).then((result) => {
                         if (result) {
                             commandsQueue.processMspResponse(result!.commandName, result!.data);
                         }
                     });
-                    await Msp.getInstance().sendWithPromise(Msp.getInstance().getTypeMotorCommand(serialStore.mspData.type)).then((result) => {
+                    await Msp.getInstance().sendWithPromise(Msp.getInstance().getTypeMotorCommand(serialStore.mspData.type), undefined, 1000).then((result) => {
                         if (result) {
                             commandsQueue.processMspResponse(result!.commandName, result!.data);
                         }
                     });
 
-                    const passthroughResult = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_SET_PASSTHROUGH);
+                    FourWay.getInstance().isArduPilot = serialStore.mspData.type === 'ardu';
+                    if (serialStore.mspData.type === 'ardu') {
+                        logWarning('ArduPilot detected: reliable ESC passthrough needs AP >= 4.6.3 (ideally 4.7.x), SERVO_BLH_AUTO=1, DShot on non-IOMCU AUX/FMU outputs, vehicle disarmed, USB (not telemetry radio), GCS disconnected.');
+                    }
+                    const passthroughResult = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_SET_PASSTHROUGH, undefined, 3000);
 
-                    await delay(2000);
+                    const fourWayReady = await FourWay.getInstance().waitForFourWayReady();
+                    if (!fourWayReady) {
+                        logWarning('ESC 4-way interface did not answer GetName in time; continuing with a short wait.');
+                        await delay(2000);
+                    }
 
                     serialStore.isFourWay = true;
 
-                    escStore.expectedCount = passthroughResult?.data.getUint8(0) ?? 0;
+                    escStore.expectedCount = (passthroughResult && passthroughResult.data.byteLength >= 1) ? passthroughResult.data.getUint8(0) : 0;
                 }
 
                 serialStore.hasConnection = true;
@@ -670,7 +798,7 @@ const connectToDevice = async () => {
 };
 
 const connectToEsc = async () => {
-    if (isDirectConnectDevice.value || isForceDirectConnect.value) {
+    if (isDirectConnectDevice.value) {
         escStore.isLoading = true;
 
         serialStore.isDirectConnect = true;
@@ -696,17 +824,26 @@ const connectToEsc = async () => {
         escStore.isLoading = false;
     } else {
         if (!serialStore.isFourWay) {
-            const result = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_SET_PASSTHROUGH);
+            FourWay.getInstance().isArduPilot = serialStore.mspData.type === 'ardu';
+            if (serialStore.mspData.type === 'ardu') {
+                logWarning('ArduPilot detected: reliable ESC passthrough needs AP >= 4.6.3 (ideally 4.7.x), SERVO_BLH_AUTO=1, DShot on non-IOMCU AUX/FMU outputs, vehicle disarmed, USB (not telemetry radio), GCS disconnected.');
+            }
+            const result = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_SET_PASSTHROUGH, undefined, 3000);
 
-            await delay(2000);
+            const fourWayReady = await FourWay.getInstance().waitForFourWayReady();
+            if (!fourWayReady) {
+                logWarning('ESC 4-way interface did not answer GetName in time; continuing with a short wait.');
+                await delay(2000);
+            }
 
             serialStore.isFourWay = true;
 
-            escStore.expectedCount = result?.data.getUint8(0) ?? 0;
+            escStore.expectedCount = (result && result.data.byteLength >= 1) ? result.data.getUint8(0) : 0;
         }
 
         escData.value = [];
         escStore.count = 0;
+        savingOrApplyingSelectedEscs.value = [];
         escStore.isLoading = true;
 
         for (let i = 0; i < escStore.expectedCount; ++i) {
@@ -729,24 +866,27 @@ const connectToEsc = async () => {
         }
 
         escStore.isLoading = false;
+
+        if (escStore.count > 0) {
+            FourWay.getInstance().startKeepAlive();
+        }
     }
 
-    if (
-        escStore.escData.filter(
-            // errored slots never get data assigned - skip them, they must
-            // not crash the empty-settings scan for the healthy ESCs
-            e => !e.isError && e.data?.settingsBuffer.length &&
-                (e.data.settingsBuffer.filter(s => s === 0xFF).length === e.data.settingsBuffer.length ||
-                  e.data.settingsBuffer.reduce((acc, cur) => acc + cur, 0) === 0)
-        ).length > 0
-    ) {
+    const emptySettingsEscNumbers = escStore.escData
+        .map((esc, i) => ({ esc, i }))
+        .filter(({ esc }) => esc.data?.settingsBuffer &&
+            (esc.data.settingsBuffer.filter(s => s === 0xFF).length === esc.data.settingsBuffer.length ||
+              esc.data.settingsBuffer.reduce((acc, cur) => acc + cur, 0) === 0))
+        .map(({ i }) => i + 1);
+
+    if (emptySettingsEscNumbers.length > 0) {
         toast.add({
             title: 'Error',
             color: 'red',
             description: 'Found empty settings, flashing default settings now!'
         });
 
-        savingOrApplyingSelectedEscs.value = escStore.selectedEscInfo.map((_, i) => i + 1);
+        savingOrApplyingSelectedEscs.value = emptySettingsEscNumbers;
 
         applyDefaultConfig();
     }
@@ -754,7 +894,7 @@ const connectToEsc = async () => {
     let needToSave = false;
 
     for (const esc of escStore.escData) {
-        if (esc.isError || !esc.data) {
+        if (!esc.data) {
             continue;
         }
         const firmwareVersion = `${esc.data.settings.MAIN_REVISION}.${esc.data.settings.SUB_REVISION}`;
@@ -762,11 +902,12 @@ const connectToEsc = async () => {
             if (esc.data.settings.TIMING_ADVANCE as number < 10) {
                 needToSave = true;
                 for (let i = 0; i < escStore.escData.length; ++i) {
-                    if (escStore.escData[i].isError || !escStore.escData[i].data) {
+                    const data = escStore.escData[i].data;
+                    if (!data) {
                         continue;
                     }
-                    escStore.escData[i].data.settingsDirty = true;
-                    escStore.escData[i].data.settings.TIMING_ADVANCE = 16;
+                    data.settingsDirty = true;
+                    data.settings.TIMING_ADVANCE = 16;
                 }
             }
         }
@@ -787,15 +928,16 @@ const writeConfig = async () => {
         escStore.isSaving = true;
 
         for (let i = 0; i < escStore.escData.length; ++i) {
-            if (!escStore.escData[i].isError && escStore.escData[i].data.settingsDirty) {
-                const result = await FourWay.getInstance().writeSettings(i, escStore.escData[i].data).catch((err) => {
+            const data = escStore.escData[i]?.data;
+            if (!escStore.escData[i].isError && data && data.settingsDirty) {
+                const result = await FourWay.getInstance().writeSettings(i, data).catch((err) => {
                     logError(`Error writing settings to ESC #${i + 1}: ${err.message}`);
                     escStore.escData[i].isError = true;
                     return null;
                 });
                 if (result) {
-                    escStore.escData[i].data.settingsBuffer = result;
-                    escStore.escData[i].data.settingsDirty = false;
+                    data.settingsBuffer = result;
+                    data.settingsDirty = false;
                 }
             }
         }
@@ -803,52 +945,13 @@ const writeConfig = async () => {
         escStore.settingsDirty = false;
     } else if (serialStore.isDirectConnect && escStore.firstValidEscData) {
         const mcu = new Mcu(escStore.firstValidEscData.data.meta.signature);
-        mcu.setInfo(escStore.firstValidEscData.data);
-        await Direct.getInstance().writeChunked(mcu.getEepromStartByte(), objectToSettingsArray(escStore.firstValidEscData.data.settings, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number), mcu.getDirectWriteChunk());
+        await Direct.getInstance().writeChunked(mcu.getEepromOffset(), objectToSettingsArray(escStore.firstValidEscData.data.settings, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number));
         escStore.firstValidEscData.data.settingsDirty = false;
         escStore.firstValidEscData.data.settingsBuffer = objectToSettingsArray(escStore.firstValidEscData.data.settings, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number);
     }
 };
 
-const disconnectFromDevice = async () => {
-    if (serialStore.deviceHandles.port) {
-        if (serialStore.isFourWay) {
-            await FourWay.getInstance().send(FOUR_WAY_COMMANDS.cmd_InterfaceExit);
-        }
-
-        Serial.deinit();
-
-        /*
-        console.log(serialStore.deviceHandles);
-        serialStore.deviceHandles.reader?.releaseLock();
-        serialStore.deviceHandles.writer?.releaseLock();
-        await serialStore.deviceHandles.port.close();
-        */
-
-        if (serialStore.deviceHandles.stream) {
-            serialStore.deviceHandles.stream.reader?.releaseLock();
-            serialStore.deviceHandles.stream.writer?.releaseLock();
-            serialStore.deviceHandles.stream.port.close();
-        }
-
-        serialStore.$reset();
-
-        escStore.$reset();
-
-        log('Connection to device closed');
-    }
-};
-
-/*
-const startLocalFlash = async (event: Event) => {
-    if (event.target instanceof HTMLInputElement) {
-        const file: File | undefined = event.target.files?.[0];
-        if (file) {
-
-        }
-    }
-};
-*/
+const disconnectFromDevice = useSerialDisconnect();
 
 const selectFile = (event: Event | FileList) => {
     if (event instanceof Event && event.target instanceof HTMLInputElement && event.target.files?.[0]) {
@@ -859,68 +962,72 @@ const selectFile = (event: Event | FileList) => {
 };
 
 const startModalFlash = async () => {
+    const logStore = useLogStore();
+    try {
     if (currentTab.value === 0) {
         const url = releases.value?.[0].children.find(c => c.name === selectedRelease.value)?.files.find(f => f.name === selectedAsset.value)?.url;
-        if (url) {
-            const dbEntry = await db.downloads.where('url').equals(url).first();
-
-            escStore.activeTarget = 0;
-            escStore.step = 'Downloading';
-
-            if (dbEntry) {
-                return startFlash(dbEntry.text);
-            }
-
-            const file: Response = await fetch(url);
-            const blob = await file.blob();
-            const data = await blob.text();
-            if (blob && typeof data === 'string') {
-                await db.downloads.add({
-                    url,
-                    text: data
-                });
-
-                startFlash(data);
-            }
+        if (!url) {
+            logStore.logError('Could not resolve firmware URL. Check that a release and asset are selected.');
+            toast.add({ title: 'Error', color: 'red', description: 'Could not resolve firmware URL.' });
+            return;
         }
-    } else if (currentTab.value === 1) {
-        const logStore = useLogStore();
-        if (fileInput.value) {
-            if (!ignoreMcuLayout.value && escStore.firstValidEscData) {
-                const mcu = new Mcu(escStore.firstValidEscData.data.meta.signature);
-                // honour v3 devinfo so the filename block is located at the
-                // bootloader-reported filename address (DroneCAN builds link
-                // it away from the EEPROM), not the static-table default.
-                mcu.setInfo(escStore.firstValidEscData.data);
-                const fileNameAddress = mcu.getFlashOffset() + mcu.getFileNameStartByte();
+        const isValidHex = (text: unknown): text is string => typeof text === 'string' && /^\s*:/m.test(text);
 
-                const fileFlash = Flash.parseHex(await fileInput.value.text());
-                const tmp = escStore.firstValidEscData.data.meta.am32;
-                if (fileFlash && tmp.fileName) {
-                    const hexFileName = Flash.getFileName(fileFlash, fileNameAddress);
-                    if (hexFileName === null) {
-                        logStore.logError('File name not found in hex, probably too old!');
-                        throw new Error('File name not found in hex file.');
-                    }
+        let dbEntry = await db.downloads.where('url').equals(url).first();
+        if (dbEntry && !isValidHex(dbEntry.text)) {
+            // Cached entry is not a hex file (e.g. an HTML error/SPA page was cached earlier).
+            // Drop it so we re-download the real firmware instead of flashing garbage.
+            await db.downloads.where('url').equals(url).delete();
+            dbEntry = undefined;
+        }
 
-                    if (tmp.mcuType && Mcu.mcuTypeFromFileName(hexFileName) !== tmp.mcuType) {
-                        logStore.logError('Invalid MCU type in hex file.');
-                        throw new Error('Invalid MCU type in hex file.');
-                    }
+        escStore.activeTarget = 0;
+        escStore.step = 'Downloading';
 
-                    // the name covers the board and whether it is a DroneCAN
-                    // build, so the hex is for this ESC only if it matches
-                    if (hexFileName !== tmp.fileName) {
-                        logStore.logError('Layout does not match! Aborting flash!');
-                        logStore.logError(`Expected: ${tmp.fileName}, given: ${hexFileName}`);
-                        throw new Error('Layout does not match! Aborting flash!');
-                    }
-                }
+        if (dbEntry) {
+            return await startFlash(dbEntry.text);
+        }
+
+        let data: string | null = null;
+        try {
+          const file: Response = await fetch(url);
+          const blob = await file.blob();
+          data = await blob.text();
+        } catch (err) {
+          try {
+            const prox = await fetch(`/api/esc-firmware/download?url=${encodeURIComponent(url)}`);
+            if (prox.ok) {
+              data = await prox.text();
+            } else {
+              throw new Error('Proxy fetch failed');
             }
-            startFlash(await fileInput.value.text());
+          } catch (err2) {
+            const msg = (err2 as any)?.message ?? String(err2);
+            logStore.logError('Failed to download firmware: ' + msg);
+            toast.add({ title: 'Error', color: 'red', description: 'Failed to download firmware.' });
+            escStore.step = '';
+            escStore.activeTarget = -1;
+            return;
+          }
+        }
+
+        if (!isValidHex(data)) {
+            // A static/SPA host answers a missing asset with index.html (HTTP 200). Never cache or
+            // flash that - report a clear error instead.
+            logStore.logError('Downloaded firmware is not a valid Intel HEX file (got HTML or empty content). The release asset is likely missing on the server.');
+            toast.add({ title: 'Error', color: 'red', description: 'Firmware file is missing or invalid on the server.' });
+            escStore.step = '';
+            escStore.activeTarget = -1;
+            return;
+        }
+
+        await db.downloads.add({ url, text: data });
+        await startFlash(data);
+    } else if (currentTab.value === 1) {
+        if (fileInput.value) {
+            await startFlash(await fileInput.value.text());
         }
     } else if (currentTab.value === 2) {
-        const logStore = useLogStore();
         if (fileInput.value && escStore.firstValidEscData) {
             const amj: AmjType = await fileInput.value.text().then((text: string) => {
                 const parsed = JSON.parse(text);
@@ -932,148 +1039,122 @@ const startModalFlash = async () => {
 
             const fileFlash = Flash.parseHex(amj.hex);
             const tmp = escStore.firstValidEscData.data;
-            const escFileName = tmp.meta?.am32?.fileName;
-            if (fileFlash) {
-                // An updater is entered at the address the installed
-                // bootloader starts the application from: a from4k updater
-                // begins at 0x1000, one for a 16k CAN bootloader at 0x4000.
-                // The wrong pairing writes an image the bootloader can never
-                // enter, over a working application.
-                const mcu = new Mcu(tmp.meta.signature);
-                mcu.setInfo(tmp);
-                const origin = fileFlash.data[0].address - mcu.getFlashOffset();
-                const appStart = mcu.getFirmwareStartByte();
-                if (origin !== appStart) {
-                    logStore.logError(`Updater starts at 0x${origin.toString(16)}, this bootloader starts the application at 0x${appStart.toString(16)}! Aborting flash!`);
-                    throw new Error('Updater does not match the installed bootloader.');
+            if (fileFlash && tmp.meta?.am32?.mcuType && tmp.meta?.am32?.fileName) {
+                if (amj.mcuType !== tmp.meta.am32.mcuType) {
+                    logStore.logError('Invalid MCU type in amj file.');
+                    throw new Error('Invalid MCU type in amj file.');
                 }
 
-                if (escFileName) {
-                    // an amj carries a bootloader, so one for the wrong MCU
-                    // takes a debugger to undo. A handful of boards name no
-                    // MCU family, leaving nothing to check the file against;
-                    // refuse those rather than let the pin stand in for the MCU
-                    if (!tmp.meta.am32.mcuType) {
-                        logStore.logError(`Cannot tell the MCU type from the ESC name ${escFileName}! Aborting flash!`);
-                        throw new Error('Cannot tell the MCU type of the ESC.');
-                    }
-
-                    if (amj.mcuType !== tmp.meta.am32.mcuType) {
-                        logStore.logError('Invalid MCU type in amj file.');
-                        throw new Error('Invalid MCU type in amj file.');
-                    }
-
-                    // bootloader.pin is '' when the reported pin code made no
-                    // sense, which no amj matches
-                    if (amj.pin !== tmp.bootloader.pin) {
-                        logStore.logError('Pin does not match! Aborting flash!');
-                        throw new Error('Pin does not match! Aborting flash!');
-                    }
+                if (amj.pin !== tmp.bootloader.pin) {
+                    logStore.logError('Pin does not match! Aborting flash!');
+                    throw new Error('Pin does not match! Aborting flash!');
                 }
             }
-            startFlash(amj.hex);
+            await startFlash(amj.hex);
         }
+    }
+    } catch (e: any) {
+        logStore.logError('Flash error: ' + (e?.message ?? String(e)));
+        toast.add({ title: 'Flash Error', color: 'red', description: e?.message ?? String(e) });
+        escStore.activeTarget = -1;
+        escStore.step = '';
     }
 };
 
 const startFlash = async (hexString: string) => {
-    if (serialStore.isDirectConnect && escStore.firstValidEscData) {
+    if (serialStore.isDirectConnect) {
         const logStore = useLogStore();
+        if (!escStore.firstValidEscData) {
+            logStore.logError('ESC not connected! Please connect to ESC first.');
+            toast.add({ title: 'Error', color: 'red', description: 'ESC not connected. Press the scan button first.' });
+            return;
+        }
         const parsed = Flash.parseHex(hexString);
         const mcu = new Mcu(escStore.firstValidEscData.data.meta.signature);
-        // v3 devinfo (address_shift, firmware/eeprom starts) from the
-        // connect-time read, so 128k parts address correctly
-        mcu.setInfo(escStore.firstValidEscData.data);
+        if (!parsed) {
+            logStore.logError('Failed to parse hex file!');
+            toast.add({ title: 'Error', color: 'red', description: 'Failed to parse hex file!' });
+            return;
+        }
+        try {
         if (parsed) {
             escStore.activeTarget = 0;
             escStore.bytesWritten = 0;
 
-            // One merged 0xFF-filled image, written in aligned chunks from
-            // the firmware start - the same shape the four-way writeHex
-            // path uses. Writing per hex block double-programmed any
-            // aligned window shared by two blocks (losing the first
-            // block's bytes to the second write's padding) and could not
-            // address blocks whose start the v3 address_shift cannot
-            // express.
-            const endAddress = parsed.data[parsed.data.length - 1].address + parsed.data[parsed.data.length - 1].bytes;
-            const image = Flash.fillImage(parsed, endAddress - mcu.getFlashOffset(), mcu.getFlashOffset());
-            if (!image) {
-                toast.add({
-                    title: 'Error',
-                    color: 'red',
-                    description: 'hex file addresses fall outside the flash!'
-                });
-                return;
-            }
-            const begin = mcu.getFirmwareStartByte();
-            escStore.totalBytes = image.byteLength - begin;
+            escStore.totalBytes = parsed.bytes;
             escStore.step = 'Writing';
 
-            // boot bit: clear before flashing, set again via the config
-            // rewrite (or reset seeding) after success, as writeHex does -
-            // a power loss mid-flash must not leave a half image bootable.
-            // LAYOUT_REVISION 0 is a zeroed eeprom, not a configuration.
-            const preFlashSettings = escStore.firstValidEscData.data.settings;
-            const havePreConfig = (preFlashSettings.BOOT_BYTE as number) <= 1 &&
-                (preFlashSettings.LAYOUT_REVISION as number) >= 1 &&
-                (preFlashSettings.LAYOUT_REVISION as number) <= 64;
-            if (havePreConfig) {
-                // the whole buffer, not just the leading bytes: the eeprom
-                // write erases its page, so a short guard would trade the
-                // rest of the stored settings for the boot byte
-                const guard = Uint8Array.from(escStore.firstValidEscData.data.settingsBuffer);
-                guard[0] = 0x00;
-                await Direct.getInstance().writeChunked(mcu.getEepromStartByte(), guard, mcu.getDirectWriteChunk());
-            }
+            let i = 0;
 
-            const CHUNK_SIZE = mcu.getDirectWriteChunk();
-            for (let off = begin; off < image.byteLength; off += CHUNK_SIZE) {
-                const end = Math.min(off + CHUNK_SIZE, image.byteLength);
-                let chunk: Uint8Array = image.subarray(off, end);
-                if (chunk.length % 8 !== 0) {
-                    // the bootloader's flash write requires an 8-byte
-                    // aligned length; pad the image tail with erased flash
-                    const padded = new Uint8Array((chunk.length + 7) & ~7).fill(0xFF);
-                    padded.set(chunk);
-                    chunk = padded;
+            const maxHexAddress = parsed.data.reduce((m, d) => Math.max(m, d.address), 0);
+            const hexFlashOffset = maxHexAddress >= mcu.getFlashOffset() ? mcu.getFlashOffset() : 0;
+
+            for (const start of parsed.data) {
+                if (start.bytes === 0) {
+                    continue;
                 }
-                await Direct.getInstance().writeBufferToAddress(off, chunk);
-                escStore.bytesWritten += end - off;
+                i = 0;
+                logStore.log(`Flashing: 0x${start.address.toString(16)}, ${start.bytes} bytes`);
+                const CHUNK_SIZE = 64;
+                while (i * CHUNK_SIZE < start.data.length) {
+                    const sliceEnd = Math.min((i + 1) * CHUNK_SIZE, start.data.length);
+                    const chunk = new Uint8Array(start.data.slice(i * CHUNK_SIZE, sliceEnd));
+                    logStore.log(`... 0x${((start.address - hexFlashOffset) + (i * CHUNK_SIZE)).toString(16)} - 0x${((start.address - hexFlashOffset) + sliceEnd - 1).toString(16)}`);
+                    await Direct.getInstance().writeBufferToAddress((start.address - hexFlashOffset) + (i * CHUNK_SIZE), chunk);
+                    escStore.bytesWritten += chunk.length;
+                    i += 1;
+                }
             }
-            // A factory-fresh ESC has an erased settings area: there is
-            // no valid layout to serialise (LAYOUT_REVISION reads 0xFF,
-            // and the version-gated fields are absent from the parsed
-            // settings) and nothing worth preserving, so leave it erased
-            // and let 'Send default config' seed it. Rewriting is for
-            // keeping a real pre-flash configuration across the update.
-            if (havePreConfig) {
-                escStore.step = 'Rewriting config';
-                // the flash completed: the ESC must boot it, whatever the
-                // boot byte said before - a reconnect after an interrupted
-                // flash reads back the 0 the guard wrote
-                escStore.firstValidEscData.data.settings.BOOT_BYTE = 1;
-                await writeConfig();
-            } else {
-                logStore.log('eeprom is erased; use "Send default config" to initialise it');
-            }
+            escStore.step = 'Rewriting config';
+            await writeConfig();
             escStore.step = 'Resetting';
             await Direct.getInstance().writeCommand(DIRECT_COMMANDS.cmd_Reset, 0);
-            await delay(3000);
+            await delay(2000);
             escStore.step = 'Read config';
-            await Direct.getInstance().init();
-
+            const newInfo = await Direct.getInstance().init();
+            if (newInfo && escStore.escData[0]) {
+                escStore.escData[0].data = newInfo;
+                escStore.escData[0].isLoading = false;
+                escStore.escData[0].isError = false;
+            }
+            escStore.step = '';
             escStore.activeTarget = -1;
+            flashModalOpen.value = false;
+            toast.add({ title: 'Flash complete', color: 'green', description: 'Firmware flashed successfully!' });
         }
+        } catch (e: any) {
+            const logStore = useLogStore();
+            logStore.logError('Flash failed: ' + (e?.message ?? String(e)));
+            toast.add({ title: 'Flash Error', color: 'red', description: e?.message ?? String(e) });
+            escStore.activeTarget = -1;
+            escStore.step = '';
+        }
+        return;
     } else {
         for (const n of savingOrApplyingSelectedEscs.value) {
-            // n is a position in the filtered selectedEscInfo list the modal
-            // shows; map it to the escData slot / four-way target behind it
-            const i = escStore.selectedEscIndices[n - 1];
-            if (i === undefined) {
-                continue;
-            }
+            const i = n - 1;
             escStore.activeTarget = i;
-            await FourWay.getInstance().writeHex(i, escStore.escData[i].data, hexString, 200);
+            try {
+                await FourWay.getInstance().writeHex(i, hexString, 200);
+            } catch (e: any) {
+                const logStore = useLogStore();
+                logStore.logError(`ESC ${i + 1}: flashing failed (${e?.message ?? String(e)}). Re-establishing 4-way passthrough...`);
+                FourWay.getInstance().stopKeepAlive();
+                try {
+                    await FourWay.getInstance().sendWithPromise(FOUR_WAY_COMMANDS.cmd_InterfaceExit);
+                } catch {
+                    // ignore - interface may already be gone
+                }
+                serialStore.isFourWay = false;
+                await delay(1500);
+                try {
+                    await connectToEsc();
+                    FourWay.getInstance().startKeepAlive();
+                } catch (reErr: any) {
+                    logStore.logError('Re-establishing passthrough also failed: ' + (reErr?.message ?? String(reErr)));
+                }
+                throw new Error(`ESC ${i + 1} flash failed - aborted to protect the ESC.`);
+            }
             await delay(200);
             if (currentTab.value === 2) {
                 escStore.step = 'Sending default config';
@@ -1088,7 +1169,6 @@ const startFlash = async (hexString: string) => {
                 escStore.step = 'Read ESC';
                 try {
                     const result = await FourWay.getInstance().getInfo(i, 20);
-
                     escStore.escData[i].data = result;
                     escStore.escData[i].isLoading = false;
                 } catch (e) {
@@ -1103,125 +1183,95 @@ const startFlash = async (hexString: string) => {
         flashModalOpen.value = false;
 
         await connectToEsc();
-        /* if (file_input.value) {
-            file_input.value.value = '';
-        } */
     }
 };
 
-// newest eeprom layout we know defaults for
-const HIGHEST_LAYOUT_REVISION = 4;
-
-const applyDefaultConfig = async () => {
-    const rawEscVersion = escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number;
-    const escName = escStore.firstValidEscData?.data.meta.am32.fileName;
-    // an erased eeprom reads 0xFF (or 0x00 when zeroed) - not a real layout.
-    // Start the descent from the newest known layout instead of walking
-    // hundreds of bogus versions (or, for 0, never running at all).
-    const layoutIsValid = rawEscVersion >= 1 && rawEscVersion <= HIGHEST_LAYOUT_REVISION;
-    const escVersion = layoutIsValid ? rawEscVersion : HIGHEST_LAYOUT_REVISION;
-
-    // Find a default image the ESC can actually take: its own layout
-    // first, then older layouts (whose fields are a subset), the named
-    // target before the generic default at each step. Every response is
-    // validated before use - an API error page written to the eeprom
-    // bricks the settings, which is exactly what used to happen here.
-    const fetchDefault = async (): Promise<{ buffer: Uint8Array, version: number } | null> => {
-        for (let version = escVersion; version >= 1; version--) {
-            for (const name of [escName, 'DEFAULT']) {
-                if (!name) {
-                    continue;
-                }
-                const url = await fetch(`/api/eeprom/${name}?version=${version}`)
-                    .then(res => (res.status === 200 ? res.text() : null))
-                    .catch(() => null);
-                if (!url) {
-                    continue;
-                }
-                const blob = await fetch(url)
-                    .then(res => (res.status === 200 ? res.arrayBuffer() : null))
-                    .catch(() => null);
-                if (!blob) {
-                    continue;
-                }
-                const buffer = new Uint8Array(blob);
-                // a settings image, not an error page: the layout byte
-                // must be the one we asked for and the boot byte sane
-                if (buffer.length >= 48 && buffer[1] === version && buffer[0] <= 1) {
-                    return { buffer, version };
-                }
+const eraseFirmware = async () => {
+    const logStore = useLogStore();
+    eraseFirmwareModalOpen.value = false;
+    try {
+        if (serialStore.isDirectConnect) {
+            if (!escStore.firstValidEscData) {
+                logStore.logError('ESC not connected! Please connect to ESC first.');
+                toast.add({ title: 'Error', color: 'red', description: 'ESC not connected. Press the scan button first.' });
+                return;
             }
-        }
-        return null;
-    };
+            const mcu = new Mcu(escStore.firstValidEscData.data.meta.signature);
+            escStore.activeTarget = 0;
+            escStore.bytesWritten = 0;
+            escStore.totalBytes = mcu.getEepromOffset() - mcu.getFirmwareStart();
+            escStore.step = 'Erasing';
 
-    const found = await fetchDefault();
-    if (!found) {
-        logError(`No valid default config available for ${escName} (eeprom v${escVersion})`);
-        if (applyDefaultConfigModalOpen.value) {
-            applyDefaultConfigModalOpen.value = false;
+            await Direct.getInstance().eraseFirmware(mcu.getFirmwareStart(), mcu.getEepromOffset());
+
+            escStore.step = 'Resetting';
+            await Direct.getInstance().writeCommand(DIRECT_COMMANDS.cmd_Reset, 0);
+            await delay(2000);
+            escStore.step = '';
+            escStore.activeTarget = -1;
+            toast.add({ title: 'Erase complete', color: 'green', description: 'Firmware erased.' });
+            return;
         }
-        return;
+
+        if (savingOrApplyingSelectedEscs.value.length === 0) {
+            toast.add({ title: 'Error', color: 'red', description: 'Select at least one ESC first.' });
+            return;
+        }
+
+        for (const n of savingOrApplyingSelectedEscs.value) {
+            const i = n - 1;
+            escStore.activeTarget = i;
+            try {
+                await FourWay.getInstance().eraseFirmware(i, 200);
+            } catch (e: any) {
+                logStore.logError(`ESC ${i + 1}: erase failed (${e?.message ?? String(e)}).`);
+                escStore.activeTarget = -1;
+                escStore.step = '';
+                throw new Error(`ESC ${i + 1} erase failed.`);
+            }
+            escStore.step = 'Resetting';
+            await FourWay.getInstance().reset(i);
+            await delay(5000);
+        }
+
+        escStore.step = '';
+        escStore.bytesWritten = 0;
+        escStore.totalBytes = 0;
+        escStore.activeTarget = -1;
+        await connectToEsc();
+        toast.add({ title: 'Erase complete', color: 'green', description: 'Firmware erased.' });
+    } catch (e: any) {
+        logStore.logError('Erase error: ' + (e?.message ?? String(e)));
+        toast.add({ title: 'Erase Error', color: 'red', description: e?.message ?? String(e) });
+        escStore.activeTarget = -1;
+        escStore.step = '';
     }
+};
 
-    const defaults = bufferToSettings(found.buffer, found.version);
-    defaults.STARTUP_MELODY = (new Array(128)).fill(0xFF);
-    // a default config must not change what the ESC is, only how it is
-    // tuned: identity fields always come from the ESC itself. An erased
-    // eeprom has no identity to keep, though - preserving its 0xFF boot
-    // byte would leave the ESC unbootable - so remember the default's
-    // boot/layout bytes for that case.
-    const defaultBootByte = defaults.BOOT_BYTE;
-    const defaultLayout = defaults.LAYOUT_REVISION;
-    delete defaults.BOOT_BYTE;
-    delete defaults.LAYOUT_REVISION;
-    delete defaults.BOOT_LOADER_REVISION;
-    delete defaults.MAIN_REVISION;
-    delete defaults.SUB_REVISION;
+import { applyDefaultEscConfig } from '~/utils/defaultEscConfig';
 
-    for (const n of savingOrApplyingSelectedEscs.value) {
-        const i = escStore.selectedEscIndices[n - 1];
-        if (i === undefined) {
-            continue;
-        }
-        const current = escStore.escData[i].data.settings;
-        // fields the (possibly older-layout) default lacks keep their
-        // current values rather than becoming undefined
-        const merged = { ...current, ...defaults };
-        const currentLayout = current.LAYOUT_REVISION as number;
-        if (!(currentLayout >= 1 && currentLayout <= HIGHEST_LAYOUT_REVISION)) {
-            merged.BOOT_BYTE = defaultBootByte;
-            merged.LAYOUT_REVISION = defaultLayout;
-        }
-        escStore.escData[i].data.settings = merged;
-        escStore.escData[i].data.settingsDirty = true;
-    }
-
-    await writeConfig().catch((err) => {
-        logError(err.message);
-    });
-
+const applyDefaultConfig = () => {
+    const targets = savingOrApplyingSelectedEscs.value
+        .map(n => escStore.escData[n - 1]?.data)
+        .filter((data): data is McuInfo => !!data);
+    applyDefaultEscConfig(targets.length > 0 ? targets : escStore.selectedEscInfo);
     if (applyDefaultConfigModalOpen.value) {
         applyDefaultConfigModalOpen.value = false;
-    }
-
-    if (applyConfigFile.value) {
-        applyConfigFile.value.input.value = '';
     }
 };
 
 const downloadEscConfig = () => {
     for (const n of savingOrApplyingSelectedEscs.value) {
-        const i = escStore.selectedEscIndices[n - 1];
-        if (i === undefined) {
+        const settingsBuffer = escStore.escData[n - 1]?.data?.settingsBuffer;
+        if (!settingsBuffer) {
             continue;
         }
-        const blob = new Blob([escStore.escData[i].data.settingsBuffer.buffer as ArrayBuffer], {
+        const blob = new Blob([settingsBuffer.buffer as ArrayBuffer], {
             type: 'application/octet-stream'
         });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `esc${i + 1}_config.bin`;
+        link.download = `esc${n}_config.bin`;
         link.click();
         URL.revokeObjectURL(link.href);
     }
@@ -1235,12 +1285,12 @@ const applyConfig = async () => {
             const settings = bufferToSettings(buffer, escStore.firstValidEscData?.data.settings.LAYOUT_REVISION as number);
 
             for (const n of savingOrApplyingSelectedEscs.value) {
-                const i = escStore.selectedEscIndices[n - 1];
-                if (i === undefined) {
+                const data = escStore.escData[n - 1]?.data;
+                if (!data) {
                     continue;
                 }
-                escStore.escData[i].data.settings = settings;
-                escStore.escData[i].data.settingsDirty = true;
+                data.settings = settings;
+                data.settingsDirty = true;
             }
 
             await writeConfig();
