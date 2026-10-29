@@ -1,5 +1,6 @@
 {
   "name": "@am32/am32-configurator",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "build": "node scripts/update-firmware.mjs && nuxt build",

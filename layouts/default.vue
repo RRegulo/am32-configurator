@@ -36,8 +36,8 @@
             </NuxtLink>
           </div>
         </div>
-        <div class="text-center min-w-[200px]">
-          v0.1.2
+        <div class="text-center min-w-[200px]" :title="versionTitle">
+          v{{ appVersion }}<template v-if="appCommit"> · {{ appCommit }}</template>
         </div>
       </div>
     </div>
@@ -51,6 +51,9 @@
 import logo from '~/assets/icons/am32-logo.svg';
 const serialStore = useSerialStore();
 const logStore = useLogStore();
+
+const { appVersion, appCommit, appDate } = useRuntimeConfig().public;
+const versionTitle = [appCommit && `commit ${appCommit}`, appDate && `built from ${appDate}`].filter(Boolean).join(', ');
 
 // Each page manages its own connection: navigating away force-disconnects,
 // the target page (e.g. motor test) connects on its own

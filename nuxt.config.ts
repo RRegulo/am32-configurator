@@ -1,3 +1,18 @@
+import { execSync } from 'node:child_process';
+import pkg from './package.json';
+
+// version shown in the corner of the UI: package.json + commit and date of the build
+// (from git; -dirty when there are uncommitted changes)
+const git = (cmd: string) => {
+    try {
+        return execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+        return '';
+    }
+};
+const commit = git('git rev-parse --short HEAD');
+const dirty = commit && git('git status --porcelain --untracked-files=no') ? '-dirty' : '';
+
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
     // Site is deployed under https://regulo.ru/configurator/
@@ -21,6 +36,11 @@ export default defineNuxtConfig({
     ssr: false,
 
     runtimeConfig: {
+        public: {
+            appVersion: pkg.version,
+            appCommit: commit + dirty,
+            appDate: git('git log -1 --format=%cs')
+        },
         redis: { // Default values
             host: process.env.REDIS_HOST,
             port: 6379
