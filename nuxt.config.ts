@@ -11,7 +11,8 @@ const git = (cmd: string) => {
     }
 };
 const commit = git('git rev-parse --short HEAD');
-const dirty = commit && git('git status --porcelain --untracked-files=no') ? '-dirty' : '';
+// nuxt.config.ts is excluded: the site build edits it temporarily (typeCheck off)
+const dirty = commit && git("git status --porcelain --untracked-files=no -- . ':!nuxt.config.ts'") ? '-dirty' : '';
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
