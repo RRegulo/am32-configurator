@@ -72,7 +72,14 @@
           </div>
         </div>
       </UCard>
-      <UCard v-if="connected">
+      <MavMotorTest
+        v-if="connected && mavMode"
+        :snapshot="mavSnapshot"
+        @set-motor="(motor, percent) => mavLink?.setMotor(motor, percent)"
+        @stop="mavLink?.stopAll()"
+        @motor-count="(count) => mavLink?.setMotorCount(count)"
+      />
+      <UCard v-else-if="connected">
         <template #header>
           <div class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2 text-xl">
@@ -194,6 +201,7 @@
 import Serial from '~/src/communication/serial';
 import Msp, { MSP_COMMANDS } from '~/src/communication/msp';
 import { FOUR_WAY_COMMANDS, FourWay } from '~/src/communication/four_way';
+import { MavlinkLink, type MavSnapshot } from '~/src/communication/mavlink';
 
 const serialStore = useSerialStore();
 const { log, logWarning, logError } = useLogStore();
@@ -212,6 +220,16 @@ const motorValues = ref<number[]>(Array(8).fill(1000));
 const motorOutputs = ref<number[]>(Array(8).fill(0));
 const battery = ref<MspData['batteryData']>(null);
 const failsafe = ref<boolean | null>(null);
+// ArduPilot doesn't spin motors on MSP_SET_MOTOR, its test runs over MAVLink instead
+const mavMode = ref(false);
+const mavSnapshot = ref<MavSnapshot>({
+    connected: false,
+    vehicle: null,
+    telemetry: { sysStatus: null, battery: null, vfr: null, attitude: null, servo: null, esc: null, gps: null },
+    activeMotor: 0,
+    activePercent: 0
+});
+let mavLink: MavlinkLink | null = null;
 const baudrate = ref('115200');
 const baudrateOptions = ['115200', '230400', '57600', '38400', '19200', '9600'];
 const motorSlots = [1, 2, 3, 4, 5, 6, 7, 8].map(n => ({ label: String(n), value: n }));
@@ -312,6 +330,67 @@ const readMotorCount = async () => {
     }
 };
 
+const createMavLink = () => new MavlinkLink(
+    (snapshot) => { mavSnapshot.value = snapshot; },
+    (message, level) => (level === 'error' ? logError : level === 'warn' ? logWarning : log)(message),
+    () => {
+        mavLink = null;
+        mavMode.value = false;
+        connected.value = false;
+        serialStore.$reset();
+        toast.add({ title: 'Отключено', color: 'orange', description: 'Связь с полётником потеряна.' });
+    }
+);
+
+const adoptMavLink = (link: MavlinkLink) => {
+    mavLink = link;
+    mavMode.value = true;
+    fcType.value = 'ARDU';
+    connected.value = true;
+    log('Подключено к полётнику (ArduPilot), тест моторов через MAVLink');
+};
+
+// ArduPilot stops talking MAVLink on a port as soon as it sees MSP there, so it has to be
+// detected before any MSP is sent: say hello with a GCS heartbeat and listen for the answer.
+const probeArduPilot = async (port: SerialPort) => {
+    if (!port.readable || !port.writable || port.readable.locked || port.writable.locked) {
+        return null;
+    }
+    const link = createMavLink();
+    try {
+        await link.attach(port);
+        if (await link.waitForArduPilot(2500)) {
+            return link;
+        }
+    } catch (e) {
+        console.error(e);
+    }
+    await link.close(true); // not ArduPilot: hand the port back for MSP
+    return null;
+};
+
+// Hand the port over from the MSP stream layer to a MAVLink link (fallback: MSP said ARDU)
+const startMavlink = async (port: SerialPort) => {
+    const stream = serialStore.deviceHandles.stream;
+    if (stream) {
+        try {
+            await stream.reader?.cancel();
+        } catch { /* ignore */ }
+        try {
+            stream.reader?.releaseLock();
+            stream.writer?.releaseLock();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    await port.close();
+    await port.open({ baudRate: +baudrate.value });
+
+    const link = createMavLink();
+    await link.attach(port);
+    adoptMavLink(link);
+};
+
 const connect = async () => {
     if (connected.value || connecting.value || serialStore.selectedDevice.id === '-1') {
         return;
@@ -339,6 +418,14 @@ const connect = async () => {
             return;
         }
 
+        if (!serialStore.isFourWay) {
+            const link = await probeArduPilot(port);
+            if (link) {
+                adoptMavLink(link);
+                return;
+            }
+        }
+
         Serial.init(log, logError, logWarning, serialStore.deviceHandles.serial, port);
 
         if (serialStore.isFourWay) {
@@ -353,6 +440,11 @@ const connect = async () => {
         const variant = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_FC_VARIANT);
         if (variant) {
             fcType.value = new TextDecoder().decode(variant.data.buffer).slice(0, 4);
+        }
+
+        if (fcType.value === 'ARDU') {
+            await startMavlink(port);
+            return;
         }
 
         const features = await Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_FEATURE_CONFIG).catch(() => null);
@@ -382,6 +474,17 @@ const connect = async () => {
 };
 
 const disconnect = async (skipStop = false) => {
+    if (mavMode.value || mavLink) {
+        const link = mavLink;
+        mavLink = null;
+        mavMode.value = false;
+        connected.value = false;
+        fcType.value = '';
+        await link?.close();
+        serialStore.$reset();
+        log('Отключено от полётника');
+        return;
+    }
     if (!skipStop && connected.value) {
         // Stop motors while the port is still open
         await stopMotors();
@@ -423,7 +526,7 @@ useIntervalFn(async () => {
 
 // Poll battery state, motor outputs and failsafe flag
 useIntervalFn(async () => {
-    if (!connected.value) {
+    if (!connected.value || mavMode.value) {
         return;
     }
     await enqueue(() => Msp.getInstance().sendWithPromise(MSP_COMMANDS.MSP_BATTERY_STATE))
@@ -464,6 +567,7 @@ useIntervalFn(async () => {
 // Leaving the page: stop the motor and force-disconnect, the configurator will
 // make its own fresh connection when needed
 onUnmounted(async () => {
+    window.removeEventListener('pagehide', onPageHide);
     if (connected.value) {
         await disconnect();
     }
@@ -476,7 +580,11 @@ onBeforeRouteLeave(async () => {
     return true;
 });
 
+// the tab closes or reloads: stop the MAVLink motor test right away
+const onPageHide = () => mavLink?.emergencyStop();
+
 onMounted(async () => {
+    window.addEventListener('pagehide', onPageHide);
     await refreshPorts();
     // Connect automatically when entering the page
     if (serialStore.selectedDevice.id !== '-1' && !connected.value) {
