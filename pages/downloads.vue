@@ -71,6 +71,7 @@
 const baseURL = useRuntimeConfig().app.baseURL;
 const docs = [
     { title: 'Регулятор ESC12S80A (все исполнения) — руководство по эксплуатации', file: 'Regulo_ESC12S80A_manual_rev2.pdf' },
+    { title: 'Регулятор ESC12S100A (все исполнения) — руководство по эксплуатации', file: 'Regulo_ESC12S100A_manual_rev1.pdf' },
     { title: '4-в-1 ESC12S80A (все исполнения) — руководство по эксплуатации', file: 'Regulo_4ESC12S80A_manual_1.2.0.pdf' },
     { title: 'BEC12S5A / BEC12S4A — руководство по эксплуатации', file: 'Regulo_BEC12S5A_BEC12S4A_manual_1.0.pdf' },
     { title: 'PDB12S400A / PDB12S600A — руководство по эксплуатации', file: 'Regulo_PDB12S400A_PDB12S600A_manual_1.0.pdf' },
