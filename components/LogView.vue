@@ -6,7 +6,7 @@
       </div>
       <div v-if="entry[2]">
         <div v-if="entry[2] === 'warning'">
-          <UIcon name="i-material-symbols-light-warning" class="text-yellow-400" />
+          <UIcon name="i-material-symbols-warning" class="text-yellow-400" />
         </div>
         <div v-else-if="entry[2] === 'error'">
           <UIcon name="i-material-symbols-error" class="text-red-400" />
